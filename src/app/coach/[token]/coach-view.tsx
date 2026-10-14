@@ -8,7 +8,7 @@ import { PHASE_LABELS } from "@/lib/cycle";
 import { addCoachComment, fetchCoachView, type Comment, type CoachView as CoachData } from "@/lib/data";
 import { calculateGoals, DEFAULT_GOAL_INPUT } from "@/lib/goals";
 import { toIsoDate } from "@/lib/plan";
-import { weekEnd, weekStats } from "@/lib/report";
+import { planSpan, weekStats } from "@/lib/report";
 import { kgToLb, round1 } from "@/lib/units";
 
 const NAME_KEY = "food-planner:coach-name";
@@ -89,13 +89,14 @@ export default function CoachView() {
         const report = data.reports.find((r) => r.week_start === weekStart);
         const stats = week?.plan ? weekStats(week.plan, data.logs, weekStart, target) : report?.stats;
         if (!stats) return null;
-        const current = today && weekStart <= today && today <= weekEnd(weekStart);
+        const span = planSpan(weekStart, week?.plan);
+        const current = today && span.first <= today && today <= span.last;
         return (
           <ReportCard
             key={weekStart}
             stats={stats}
             narrative={report?.narrative}
-            title={current ? `This week (from ${formatDate(weekStart)})` : undefined}
+            title={current ? `This week (from ${formatDate(span.first)})` : undefined}
           >
             {week && week.phases.length > 0 && (
               <p className="mt-3 text-xs text-muted">

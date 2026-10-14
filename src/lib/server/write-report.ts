@@ -9,7 +9,7 @@ import { calculateGoals, DEFAULT_GOAL_INPUT } from "../goals";
 import { fallbackParams, MAIA_MODEL } from "../maia/client";
 import { REPORT_SYSTEM_PROMPT, ReportNarrativeSchema } from "../maia/report-prompt";
 import { WeekPlanSchema } from "../plan";
-import { describeWeek, weekEnd, weekStats } from "../report";
+import { describeWeek, planSpan, weekStats } from "../report";
 
 export class ReportError extends Error {
   constructor(
@@ -21,21 +21,22 @@ export class ReportError extends Error {
 }
 
 export async function writeReport(db: SupabaseClient, userId: string, weekStart: string) {
-  const [profile, week, logs] = await Promise.all([
+  const [profile, week] = await Promise.all([
     db.from("profiles").select("goal_input").eq("user_id", userId).maybeSingle(),
     db.from("week_plans").select("plan").eq("user_id", userId).eq("week_start", weekStart).maybeSingle(),
-    db
-      .from("day_logs")
-      .select("date, check_ins, extras")
-      .eq("user_id", userId)
-      .gte("date", weekStart)
-      .lte("date", weekEnd(weekStart)),
   ]);
-  if (profile.error || week.error || logs.error) {
-    throw new ReportError("Couldn't read your data. Please try again.", 502);
-  }
+  if (profile.error || week.error) throw new ReportError("Couldn't read your data. Please try again.", 502);
   const plan = WeekPlanSchema.safeParse(week.data?.plan);
   if (!profile.data || !plan.success) throw new ReportError("There's no plan for that week yet.", 404);
+
+  const span = planSpan(weekStart, plan.data);
+  const logs = await db
+    .from("day_logs")
+    .select("date, check_ins, extras")
+    .eq("user_id", userId)
+    .gte("date", span.first)
+    .lte("date", span.last);
+  if (logs.error) throw new ReportError("Couldn't read your data. Please try again.", 502);
 
   const goal = calculateGoals({ ...DEFAULT_GOAL_INPUT, ...profile.data.goal_input });
   const target = { calories: goal.calories, proteinG: goal.proteinG, carbsG: goal.carbsG, fatG: goal.fatG };

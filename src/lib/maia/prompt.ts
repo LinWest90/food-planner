@@ -105,6 +105,7 @@ export interface PlanningContext {
   target: Totals;
   weekStart: string;
   weekEnd: string;
+  today: string;
   phases: CyclePhase[];
   mode: PlanningMode;
 }
@@ -116,7 +117,8 @@ export function planningContext(ctx: PlanningContext): string {
   return [
     "[Planning context]",
     `Daily targets: ${ctx.target.calories} kcal, protein ${ctx.target.proteinG} g, carbs ${ctx.target.carbsG} g, fat ${ctx.target.fatG} g`,
-    `Week: ${ctx.weekStart} (Monday) to ${ctx.weekEnd} (Sunday)`,
+    `Today: ${ctx.today}`,
+    `Week being planned: ${ctx.weekStart} to ${ctx.weekEnd} (use these dates unless she asks to start on another day, such as today)`,
     `Expected cycle phases this week, in order: ${phases}`,
     `Mode: ${ctx.mode === "prep" ? "meal prep (batch cook ahead)" : "cook each meal fresh, no big prep session"}`,
   ].join("\n");

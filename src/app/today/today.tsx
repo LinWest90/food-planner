@@ -64,8 +64,9 @@ export default function Today() {
   /** Loads the plan covering `forDate` and that week's check-ins. */
   async function loadDate(forDate: string) {
     const session = await fetchWeekContaining(forDate);
-    const from = session?.weekStart ?? forDate;
-    const log = await fetchDayLogs(from, session ? shiftDate(from, 6) : forDate);
+    // Load check-ins for every day the plan covers (plus the day shown).
+    const dates = [forDate, ...(session?.plan?.days.map((d) => d.date) ?? [])].sort();
+    const log = await fetchDayLogs(dates[0], dates[dates.length - 1]);
     setState((prev) => prev && { ...prev, session, log: { ...prev.log, ...log } });
   }
 

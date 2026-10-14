@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { formatDate } from "@/components/report-card";
 import { countUnreadCoachComments, fetchRecentWeeks, fetchReports } from "@/lib/data";
 import { toIsoDate } from "@/lib/plan";
-import { weekNeedingReport } from "@/lib/report";
+import { planSpan, weekNeedingReport } from "@/lib/report";
 import { requestReport } from "@/lib/reports-client";
 
 /**
@@ -23,7 +23,7 @@ export default function ReportNudge() {
     (async () => {
       const [weeks, reports] = await Promise.all([fetchRecentWeeks(3), fetchReports()]);
       const due = weekNeedingReport(
-        weeks.map((w) => w.weekStart),
+        weeks.map((w) => ({ weekStart: w.weekStart, last: planSpan(w.weekStart, w.plan).last })),
         reports.map((r) => r.week_start),
         toIsoDate(new Date()),
       );

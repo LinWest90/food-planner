@@ -135,6 +135,7 @@ export default function Planner() {
             target,
             weekStart: session.weekStart,
             weekEnd: addDays(session.weekStart, 6),
+            today: toIsoDate(new Date()),
             phases: session.phases,
             mode: session.mode,
           },

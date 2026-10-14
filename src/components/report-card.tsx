@@ -28,7 +28,7 @@ export default function ReportCard({
 
   return (
     <section className="rounded-xl border border-line bg-surface p-4 text-sm">
-      <h2 className="font-semibold">{title ?? `Week of ${formatDate(stats.weekStart)}`}</h2>
+      <h2 className="font-semibold">{title ?? `Week of ${formatDate(stats.days[0]?.date ?? stats.weekStart)}`}</h2>
 
       <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
         <Stat label="Avg kcal" value={stats.avgCalories ?? "–"} sub={`target ${t.calories}`} />

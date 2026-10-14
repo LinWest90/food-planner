@@ -32,6 +32,7 @@ const RequestSchema = z.object({
     }),
     weekStart: z.string(),
     weekEnd: z.string(),
+    today: z.string(),
     phases: z.array(z.enum(CYCLE_PHASES)),
     mode: z.enum(["prep", "daily"]),
   }),

@@ -99,15 +99,31 @@ function addDays(isoDate: string, days: number): string {
 
 export const weekEnd = (weekStart: string) => addDays(weekStart, 6);
 
-/** Finished weeks (ended before today, within the last two weeks) that have a plan but no report. */
-export function weeksNeedingReports(weekStarts: string[], reported: string[], today: string): string[] {
+/**
+ * First and last day a week's plan covers. Usually the 7 days from its
+ * "week starting" date, but a plan can start earlier or later (for example
+ * when Maia is asked to start mid-week), so the plan's own dates win.
+ */
+export function planSpan(weekStart: string, plan: WeekPlan | null | undefined): { first: string; last: string } {
+  const dates = (plan?.days ?? []).map((d) => d.date).sort();
+  return dates.length ? { first: dates[0], last: dates[dates.length - 1] } : { first: weekStart, last: weekEnd(weekStart) };
+}
+
+export interface WeekSpan {
+  weekStart: string;
+  last: string;
+}
+
+/** Finished weeks (last day before today, within the last two weeks) without a report. */
+export function weeksNeedingReports(weeks: WeekSpan[], reported: string[], today: string): string[] {
   const twoWeeksAgo = addDays(today, -14);
-  return weekStarts
-    .filter((w) => weekEnd(w) < today && weekEnd(w) >= twoWeeksAgo && !reported.includes(w))
+  return weeks
+    .filter((w) => w.last < today && w.last >= twoWeeksAgo && !reported.includes(w.weekStart))
+    .map((w) => w.weekStart)
     .sort();
 }
 
 /** The newest of those, if any: written when the app is opened after a week ends. */
-export function weekNeedingReport(weekStarts: string[], reported: string[], today: string): string | null {
-  return weeksNeedingReports(weekStarts, reported, today).at(-1) ?? null;
+export function weekNeedingReport(weeks: WeekSpan[], reported: string[], today: string): string | null {
+  return weeksNeedingReports(weeks, reported, today).at(-1) ?? null;
 }

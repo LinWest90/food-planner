@@ -20,7 +20,7 @@ import {
 } from "@/lib/data";
 import { calculateGoals } from "@/lib/goals";
 import { toIsoDate, type Totals } from "@/lib/plan";
-import { weekEnd, weekNeedingReport, weekStats } from "@/lib/report";
+import { planSpan, weekNeedingReport, weekStats } from "@/lib/report";
 import { requestReport } from "@/lib/reports-client";
 import CoachLink from "./coach-link";
 
@@ -62,8 +62,10 @@ export default function Reports() {
       ]);
       if (!goal) throw new Error("Set your goal first.");
       const g = calculateGoals(goal);
-      const oldest = weeks.at(-1)?.weekStart;
-      const logs = oldest ? await fetchDayLogs(oldest, weekEnd(weeks[0].weekStart)) : {};
+      const spans = weeks.map((w) => planSpan(w.weekStart, w.plan));
+      const firsts = spans.map((x) => x.first).sort();
+      const lasts = spans.map((x) => x.last).sort();
+      const logs = spans.length ? await fetchDayLogs(firsts[0], lasts[lasts.length - 1]) : {};
       setData({
         target: { calories: g.calories, proteinG: g.proteinG, carbsG: g.carbsG, fatG: g.fatG },
         weeks,
@@ -76,7 +78,7 @@ export default function Reports() {
       markCoachCommentsRead().catch(() => {});
       // Write last week's report automatically if it's missing.
       const due = weekNeedingReport(
-        weeks.map((w) => w.weekStart),
+        weeks.map((w, i) => ({ weekStart: w.weekStart, last: spans[i].last })),
         reports.map((r) => r.week_start),
         today,
       );
@@ -102,8 +104,9 @@ export default function Reports() {
 
       {data?.weeks.map((week) => {
         const report = data.reports.find((r) => r.week_start === week.weekStart);
-        const finished = weekEnd(week.weekStart) < data.today;
-        const started = week.weekStart <= data.today;
+        const span = planSpan(week.weekStart, week.plan);
+        const finished = span.last < data.today;
+        const started = span.first <= data.today;
         const live = week.plan ? weekStats(week.plan, data.logs, week.weekStart, data.target) : null;
         const stats = report?.stats ?? live;
         if (!stats) return null;

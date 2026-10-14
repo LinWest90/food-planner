@@ -34,13 +34,13 @@ const fromWeekRow = (r: WeekRow): PlanningSession => ({
   plan: r.plan,
 });
 
-async function userId(): Promise<string> {
+export async function userId(): Promise<string> {
   const { data } = await supabase().auth.getSession();
   if (!data.session) throw new Error("Not signed in.");
   return data.session.user.id;
 }
 
-function check<T>({ data, error }: { data: T; error: { message: string } | null }): T {
+export function check<T>({ data, error }: { data: T; error: { message: string } | null }): T {
   if (error?.message.includes("schema cache")) {
     throw new Error(
       "Some database tables haven't been set up yet. Run the SQL files in supabase/migrations/ in the Supabase SQL editor (see README).",
@@ -66,21 +66,33 @@ export async function fetchWeek(weekStart: string): Promise<PlanningSession | nu
   return row ? fromWeekRow(row) : null;
 }
 
-/** The most recent plan starting within the 7 days up to `date`. */
+/**
+ * The plan covering `date`. Matches on the plan's own day dates, since a plan
+ * can start on another day than its "week starting" date (for example when
+ * Maia is asked to start today). Falls back to a week starting in the 7 days
+ * up to `date`, for weeks that don't have a plan yet.
+ */
 export async function fetchWeekContaining(date: string): Promise<PlanningSession | null> {
-  const [y, m, d] = date.split("-").map(Number);
-  const earliest = toIsoDate(new Date(y, m - 1, d - 6));
   const rows = check(
     await supabase()
       .from("week_plans")
       .select("*")
-      .lte("week_start", date)
-      .gte("week_start", earliest)
+      .gte("week_start", addDays(date, -13))
+      .lte("week_start", addDays(date, 13))
       .order("week_start", { ascending: false })
-      .limit(1)
       .returns<WeekRow[]>(),
   );
-  return rows?.[0] ? fromWeekRow(rows[0]) : null;
+  const weeks = (rows ?? []).map(fromWeekRow);
+  return (
+    weeks.find((w) => w.plan?.days.some((d) => d.date === date)) ??
+    weeks.find((w) => w.weekStart <= date && date <= addDays(w.weekStart, 6)) ??
+    null
+  );
+}
+
+function addDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return toIsoDate(new Date(y, m - 1, d + days));
 }
 
 export async function saveWeek(s: PlanningSession): Promise<void> {
