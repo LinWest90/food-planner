@@ -23,7 +23,8 @@ take priority over `.env.local`.
 1. **Create the tables.** In your Supabase project, open the SQL editor and
    run each file in `supabase/migrations/` once, oldest first
    (`20261014120000_init.sql`, `20261015120000_coach_and_reports.sql`,
-   `20261016120000_coach_comments.sql`, then `20261017120000_favorites.sql`).
+   `20261016120000_coach_comments.sql`, `20261017120000_favorites.sql`,
+   then `20261018120000_push_notifications.sql`).
    Alternatively, run `npx supabase link` and then `npx supabase db push`.
 2. **Create your account.** In Authentication → Users, add a user with your
    email and a password. The app has no sign-up screen.
@@ -64,6 +65,35 @@ and skips weeks that already have one, so a missed or repeated run is
 harmless. Vercel sends `Authorization: Bearer $CRON_SECRET`; other callers
 get 401.
 
+### Meal reminders (phone notifications)
+
+1. Open the app's **Reminders** page and tap **Make keys** (made on the
+   device with Web Crypto, not sent anywhere). Add them in Vercel as
+   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`
+   (`mailto:` plus your email), then redeploy.
+2. Vercel's free plan only runs scheduled jobs daily, so a Supabase
+   `pg_cron` job calls `/api/cron/reminders` every 10 minutes. In the
+   Supabase SQL editor (with your app URL and `CRON_SECRET`):
+
+   ```sql
+   create extension if not exists pg_cron;
+   create extension if not exists pg_net;
+   select cron.schedule('meal-reminders', '*/10 * * * *', $$
+     select net.http_get(
+       url := 'https://YOUR-APP.vercel.app/api/cron/reminders',
+       headers := jsonb_build_object('Authorization', 'Bearer YOUR_CRON_SECRET'),
+       timeout_milliseconds := 30000
+     )
+   $$);
+   ```
+3. On iPhone (iOS 16.4+), add the app to the home screen, open it from
+   there, and turn reminders on in **Reminders**.
+
+Each meal gets at most one reminder, sent within 3 hours after its
+check-in time (local time from the device's time zone) and only if it
+hasn't been checked in. If delivery fails, the next run retries; devices
+that have unsubscribed are removed.
+
 Maia's planning route can run up to 300 seconds (`maxDuration`), which
 is within Vercel's Hobby plan limit when Fluid compute is on (the default).
 
@@ -98,7 +128,7 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       instead and Maia estimates it and suggests changes to later meals.
       Nothing changes until you tap "Update my plan". You can also log
       extra food, and see the day so far and the week's projected total.
-      In-app only for now; phone notifications need the hosted version.
+      Phone notifications remind you too (see **Meal reminders** above).
 - [x] **Database and sign-in** (Supabase). Email and password sign-in. Goal,
       week plans (including the Maia chat) and check-ins are stored per
       user, protected by row level security, so they sync across devices.
@@ -161,9 +191,9 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
   candidates still need checking for coverage and licence: the Swedish
   Food Agency database, USDA FoodData Central, and Open Food Facts for
   packaged foods / barcodes. Label photos override database values.
-- **Reminders**: meal check-ins as web push notifications. iOS supports
-  these only for web apps added to the home screen (iOS 16.4+), so this
-  needs testing on a real phone.
+- **Reminders**: Web Push (VAPID, `web-push`) with a minimal service
+  worker (`public/sw.js`). iOS supports it only for web apps added to the
+  home screen (iOS 16.4+).
 - **Weekly report timing**: a daily Vercel Cron job writes missing
   reports using the Supabase secret key (server only). Opening the app
   after a week ends also writes one if it's still missing.
