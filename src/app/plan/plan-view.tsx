@@ -26,32 +26,48 @@ export default function PlanView({
   plan,
   target,
   view,
-  onTogglePrep,
+  onToggle,
 }: {
   plan: WeekPlan | null;
   target: Totals;
   view: "Plan" | "Shopping" | "Prep";
-  onTogglePrep: (index: number) => void;
+  onToggle: (list: "prepTasks" | "shoppingList", index: number) => void;
 }) {
   if (!plan) {
     return <p className="text-sm text-muted">No plan yet. Chat with Maia to make one.</p>;
   }
 
   if (view === "Shopping") {
-    const byCategory = new Map<string, WeekPlan["shoppingList"]>();
-    for (const item of plan.shoppingList) {
-      byCategory.set(item.category, [...(byCategory.get(item.category) ?? []), item]);
-    }
+    const byCategory = new Map<string, { index: number; item: string; quantity: string; done: boolean }[]>();
+    plan.shoppingList.forEach((i, index) => {
+      const row = { index, item: i.item, quantity: i.quantity, done: !!i.done };
+      byCategory.set(i.category, [...(byCategory.get(i.category) ?? []), row]);
+    });
+    const doneCount = plan.shoppingList.filter((i) => i.done).length;
     return (
       <div className="space-y-4">
+        <p className="text-xs text-muted tabular-nums">
+          {doneCount === plan.shoppingList.length
+            ? "Everything's in the cart ✓"
+            : `${doneCount} of ${plan.shoppingList.length} items in the cart`}
+        </p>
         {[...byCategory].map(([category, items]) => (
           <section key={category}>
             <h2 className="text-sm font-semibold">{category}</h2>
             <ul className="mt-1 divide-y divide-line rounded-lg border border-line bg-surface">
               {items.map((i) => (
-                <li key={i.item} className="flex justify-between gap-3 px-3 py-2 text-sm">
-                  <span>{i.item}</span>
-                  <span className="text-right text-muted">{i.quantity}</span>
+                <li key={i.index}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={i.done}
+                    onClick={() => onToggle("shoppingList", i.index)}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm"
+                  >
+                    <Check done={i.done} />
+                    <span className={`flex-1 ${i.done ? "text-muted line-through" : ""}`}>{i.item}</span>
+                    <span className={`text-right text-muted ${i.done ? "line-through" : ""}`}>{i.quantity}</span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -89,7 +105,7 @@ export default function PlanView({
                       type="button"
                       role="checkbox"
                       aria-checked={t.done}
-                      onClick={() => onTogglePrep(t.index)}
+                      onClick={() => onToggle("prepTasks", t.index)}
                       className="flex w-full gap-3 rounded-lg py-1.5 text-left text-sm leading-relaxed"
                     >
                       <span
@@ -163,5 +179,18 @@ export default function PlanView({
         );
       })}
     </div>
+  );
+}
+
+function Check({ done }: { done: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${
+        done ? "border-accent bg-accent text-on-accent" : "border-line bg-background"
+      }`}
+    >
+      {done ? "✓" : ""}
+    </span>
   );
 }
