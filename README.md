@@ -56,7 +56,7 @@ start` runs a local copy in Docker (it prints a local URL and keys).
 Maia's planning route can run up to 300 seconds (`maxDuration`), which
 is within Vercel's Hobby plan limit when Fluid compute is on (the default).
 
- (App Router), React 19, TypeScript and Tailwind CSS 4.
+Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 
 ## Decisions so far
 
