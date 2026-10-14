@@ -20,3 +20,25 @@ export function saveGoalInput(input: GoalInput): void {
     // Storage can be unavailable (private mode); the form still works.
   }
 }
+
+const SESSION_KEY = "food-planner:planning-session";
+
+export function loadJson<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage full or unavailable; the session still works until reload.
+  }
+}
+
+export const loadPlanningSession = <T>() => loadJson<T>(SESSION_KEY);
+export const savePlanningSession = (session: unknown) => saveJson(SESSION_KEY, session);

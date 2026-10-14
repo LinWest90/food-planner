@@ -13,6 +13,9 @@ npm test        # unit tests
 npm run lint
 ```
 
+To use Maia, copy `.env.example` to `.env.local` and add your Anthropic API
+key. The key stays on the server and is never sent to the browser.
+
 Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 
 ## Decisions so far
@@ -23,7 +26,7 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 | Users | Just me + my coach |
 | Coach access | Private read-only share link |
 | AI | Claude (Anthropic API), called only from the server |
-| Cycle data | Natural Cycles → Apple Health → app (see below) |
+| Cycle data | Pick the week's phases with buttons when planning (no automatic sync) |
 | Language / units | English; lb and ft/in, with kg/cm shown alongside (stored in metric) |
 
 ## Status
@@ -32,18 +35,19 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       weight and time frame give daily calories and macros (Mifflin-St Jeor
       plus activity multiplier, about 7700 kcal per kg). Stored on the device
       for now.
+- [x] **Planning chat with Maia** (`/plan`). Pick the week, tap the cycle
+      phases in the order they'll happen (e.g. Luteal → Menstrual), choose
+      meal prep or cook each meal, then chat. Maia saves the plan with a
+      tool call. The app adds up each day's totals, and Maia corrects
+      portions if a day is off target.
+- [x] Plan, shopping list and prep list tabs
 - [ ] Database and sign-in (Supabase) so the data can be shared
-- [ ] Weekly planning chat with Maia, with cycle-phase suggestions and
-      reasons you can accept or override
-- [ ] Weekly plan view: prep mode vs cook-each-meal mode
-- [ ] Shopping list and meal prep to-do list made from the plan
 - [ ] Favorites (breakfast / lunch / dinner / snacks) and recipes
 - [ ] Recipe import from a link (web pages; social posts depend on what
       each site exposes)
 - [ ] Nutrition label photo → macros (Claude vision)
 - [ ] Meal check-ins: "Did this meal happen as planned?" ✅ / ❌, then
       Maia rebalances the rest of the day or week
-- [ ] Cycle sync (see below)
 - [ ] Coach share link and weekly report
 
 ## Planned architecture
@@ -51,9 +55,16 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 - **Next.js on Vercel**: the UI plus server routes that call Claude, so
   the API key never reaches the browser.
 - **Supabase**: Postgres database, sign-in, and photo storage for labels.
-- **Claude tool use**: Maia gets tools such as `lookup_food`,
-  `set_meal`, `log_deviation` and `get_day_totals`. The app computes
-  totals from stored food data. The model doesn't do the arithmetic.
+- **Claude tool use**: Maia runs on Claude Opus 5.5 (`src/app/api/maia/route.ts`)
+  and saves plans through a `save_week_plan` tool. The app adds up the
+  totals; the model doesn't do the arithmetic. Per-meal calories and
+  macros are still Maia's estimates until a food database is connected.
+  Later tools: `lookup_food`, `log_deviation`.
+- **Refusal fallback**: requests opt in to Anthropic's server-side
+  fallback (`fallbacks: "default"`), so if a safety check declines a
+  request, the API retries it on another model instead of failing.
+- **No sign-in yet**: anyone who can reach `/api/maia` could use the API
+  key. Don't deploy publicly until sign-in is added.
 - **Nutrition data**: food values come from a public food database. The
   candidates still need checking for coverage and licence: the Swedish
   Food Agency database, USDA FoodData Central, and Open Food Facts for
@@ -64,25 +75,13 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 - **Weekly report**: a scheduled job every Sunday writes the report and
   updates the coach's share link page.
 
-### Cycle sync
+### Cycle phases
 
-A web app can't read Apple Health directly. The plan is:
-
-1. **Natural Cycles → Apple Health.** Natural Cycles' help centre says it
-   can export period flow (and spotting, cervical mucus, ovulation tests)
-   to Apple Health, under *Settings → Integrations*. The export runs when
-   the NC app is opened. Temperature does not sync.
-   ([How to sync with Apple Health](https://help.naturalcycles.com/hc/en-us/articles/4405598610577-How-to-sync-with-Apple-Health))
-2. **Apple Health → app.** An Apple **Shortcuts** automation reads recent
-   menstrual flow samples and posts the period start dates to a private
-   app endpoint. **Not yet confirmed:** that the Shortcuts *Find Health
-   Samples* action can read menstrual flow. This needs testing on the
-   phone.
-3. **Phase estimate.** NC's fertility status and confirmed ovulation don't
-   reach Health, so the app estimates the cycle phase from period start
-   dates and average cycle length. That's an approximation.
-
-Manual "period started" logging will be built as a fallback either way.
+There's no reliable way to get Natural Cycles data into a web app
+(Natural Cycles can export period data to Apple Health, but Shortcuts
+can't read it back out). So you choose the coming week's phases with buttons
+when planning, in the order they'll happen. Maia asks which day the phase
+changes if it matters.
 
 ## Accounts needed
 
