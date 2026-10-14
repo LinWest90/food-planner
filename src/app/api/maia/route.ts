@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { CYCLE_PHASES } from "@/lib/cycle";
+import { fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
 import {
   MAIA_SYSTEM_PROMPT,
   SAVE_WEEK_PLAN_TOOL,
@@ -11,7 +12,6 @@ import { WeekPlanSchema, describeTotals, type WeekPlan } from "@/lib/plan";
 // A full week plan can take a minute or two to write.
 export const maxDuration = 300;
 
-const MODEL = "claude-opus-5-5";
 // Max model calls per user message: reply, save, adjust and save again, summary.
 const MAX_STEPS = 5;
 
@@ -44,7 +44,7 @@ export type MaiaEvent =
 export async function POST(request: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return Response.json(
-      { error: "Maia isn't set up yet: ANTHROPIC_API_KEY is missing from .env.local." },
+      { error: MISSING_KEY_ERROR },
       { status: 500 },
     );
   }
@@ -75,10 +75,9 @@ export async function POST(request: Request) {
       try {
         for (let step = 0; step < MAX_STEPS; step++) {
           const response = client.beta.messages.stream({
-            model: MODEL,
+            model: MAIA_MODEL,
             max_tokens: 64000,
-            betas: ["server-side-fallback-2026-07-01"],
-            fallbacks: "default",
+            ...fallbackParams(),
             output_config: { effort: "medium" },
             cache_control: { type: "ephemeral" },
             system: MAIA_SYSTEM_PROMPT,

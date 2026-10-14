@@ -1,10 +1,9 @@
 import Link from "next/link";
+import CheckInPrompt from "./checkin-prompt";
 import GoalSummary from "./goal-summary";
 
 const comingSoon = [
-  "Meal check-ins: “Did this meal happen?”",
   "Favorites and recipe import",
-  "Shopping and meal prep lists",
   "Coach share link and weekly reports",
 ];
 
@@ -13,7 +12,14 @@ export default function Home() {
     <main className="mx-auto w-full max-w-md px-4 py-6">
       <h1 className="text-2xl font-semibold">Food Planner</h1>
       <p className="mt-1 text-sm text-muted">Plan your week with Maia.</p>
+      <CheckInPrompt />
       <GoalSummary />
+      <Link
+        href="/today"
+        className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
+      >
+        Today&apos;s meals and check-ins →
+      </Link>
       <Link
         href="/plan"
         className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"

@@ -1,6 +1,11 @@
 // Temporary on-device storage. This will move to a database (Supabase) so
 // the coach share link and weekly reports can read the same data.
+import type Anthropic from "@anthropic-ai/sdk";
+import type { FoodLog } from "./checkins";
+import type { CyclePhase } from "./cycle";
 import { DEFAULT_GOAL_INPUT, type GoalInput } from "./goals";
+import type { PlanningMode } from "./maia/prompt";
+import type { WeekPlan } from "./plan";
 
 const GOAL_KEY = "food-planner:goal-input";
 
@@ -40,5 +45,18 @@ export function saveJson(key: string, value: unknown): void {
   }
 }
 
-export const loadPlanningSession = <T>() => loadJson<T>(SESSION_KEY);
-export const savePlanningSession = (session: unknown) => saveJson(SESSION_KEY, session);
+export interface PlanningSession {
+  weekStart: string;
+  phases: CyclePhase[];
+  mode: PlanningMode;
+  history: Anthropic.Beta.BetaMessageParam[];
+  plan: WeekPlan | null;
+}
+
+export const loadPlanningSession = () => loadJson<PlanningSession>(SESSION_KEY);
+export const savePlanningSession = (session: PlanningSession) => saveJson(SESSION_KEY, session);
+
+const LOG_KEY = "food-planner:food-log";
+
+export const loadFoodLog = () => loadJson<FoodLog>(LOG_KEY) ?? {};
+export const saveFoodLog = (log: FoodLog) => saveJson(LOG_KEY, log);

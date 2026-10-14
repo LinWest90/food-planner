@@ -1,24 +1,19 @@
 "use client";
 
-import type Anthropic from "@anthropic-ai/sdk";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { MaiaEvent } from "@/app/api/maia/route";
 import { CYCLE_PHASES, PHASE_LABELS, type CyclePhase } from "@/lib/cycle";
 import { calculateGoals, type GoalResult } from "@/lib/goals";
-import type { PlanningMode } from "@/lib/maia/prompt";
 import { nextMonday, toIsoDate, type WeekPlan } from "@/lib/plan";
-import { loadGoalInput, loadPlanningSession, savePlanningSession } from "@/lib/storage";
+import {
+  loadGoalInput,
+  loadPlanningSession,
+  savePlanningSession,
+  type PlanningSession,
+} from "@/lib/storage";
 import ChatView from "./chat-view";
 import PlanView from "./plan-view";
-
-export interface PlanningSession {
-  weekStart: string;
-  phases: CyclePhase[];
-  mode: PlanningMode;
-  history: Anthropic.Beta.BetaMessageParam[];
-  plan: WeekPlan | null;
-}
 
 const TABS = ["Chat", "Plan", "Shopping", "Prep"] as const;
 type Tab = (typeof TABS)[number];
@@ -48,7 +43,7 @@ export default function Planner() {
 
   useEffect(() => {
     const input = loadGoalInput();
-    const stored = loadPlanningSession<PlanningSession>();
+    const stored = loadPlanningSession();
     // Device storage is only readable after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGoal(input ? calculateGoals(input) : null);

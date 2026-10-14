@@ -41,13 +41,18 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       tool call. The app adds up each day's totals, and Maia corrects
       portions if a day is off target.
 - [x] Plan, shopping list and prep list tabs
+- [x] **Meal check-ins** (`/today`). After each meal's time (breakfast 9:00,
+      lunch 13:00, snack 16:00, dinner 19:30) the home screen asks "Did lunch
+      happen as planned?". Answer ✅ or ❌. For ❌, describe what you ate
+      instead and Maia estimates it and suggests changes to later meals.
+      Nothing changes until you tap "Update my plan". You can also log
+      extra food, and see the day so far and the week's projected total.
+      In-app only for now; phone notifications need the hosted version.
 - [ ] Database and sign-in (Supabase) so the data can be shared
 - [ ] Favorites (breakfast / lunch / dinner / snacks) and recipes
 - [ ] Recipe import from a link (web pages; social posts depend on what
       each site exposes)
 - [ ] Nutrition label photo → macros (Claude vision)
-- [ ] Meal check-ins: "Did this meal happen as planned?" ✅ / ❌, then
-      Maia rebalances the rest of the day or week
 - [ ] Coach share link and weekly report
 
 ## Planned architecture
@@ -59,7 +64,9 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
   and saves plans through a `save_week_plan` tool. The app adds up the
   totals; the model doesn't do the arithmetic. Per-meal calories and
   macros are still Maia's estimates until a food database is connected.
-  Later tools: `lookup_food`, `log_deviation`.
+  Check-ins (`src/app/api/checkin/route.ts`) use structured output: Maia
+  returns what you ate plus changes to meals, and the app only accepts
+  changes to meals that haven't happened yet.
 - **Refusal fallback**: requests opt in to Anthropic's server-side
   fallback (`fallbacks: "default"`), so if a safety check declines a
   request, the API retries it on another model instead of failing.
