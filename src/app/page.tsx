@@ -16,13 +16,13 @@ export default function Home() {
         href="/today"
         className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
       >
-        Today&apos;s meals and check-ins →
+        🍽️ Today&apos;s meals and check-ins →
       </Link>
       <Link
         href="/plan"
         className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
       >
-        Plan the week with Maia →
+        🗓️ Plan the week with Maia →
       </Link>
       <Link
         href="/favorites"
@@ -34,7 +34,7 @@ export default function Home() {
         href="/report"
         className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
       >
-        Weekly reports and coach link →
+        📊 Weekly reports and coach link →
       </Link>
       <Link
         href="/notifications"
