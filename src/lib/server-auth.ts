@@ -1,4 +1,4 @@
-import { createClient, type User } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { SUPABASE_KEY, SUPABASE_URL } from "./supabase";
 
 /**
@@ -7,7 +7,7 @@ import { SUPABASE_KEY, SUPABASE_URL } from "./supabase";
  * those accounts may use the API, so a stray sign-up can't spend API credit.
  */
 export async function requireUser(request: Request): Promise<User | Response> {
-  const token = request.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
+  const token = bearerToken(request);
   if (!token) return Response.json({ error: "Please sign in again." }, { status: 401 });
 
   const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -21,4 +21,16 @@ export async function requireUser(request: Request): Promise<User | Response> {
     return Response.json({ error: "This account isn't allowed to use Maia." }, { status: 403 });
   }
   return data.user;
+}
+
+export function bearerToken(request: Request): string | undefined {
+  return request.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
+}
+
+/** A Supabase client acting as the signed-in user, so row level security still applies. */
+export function userClient(token: string): SupabaseClient {
+  return createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
 }

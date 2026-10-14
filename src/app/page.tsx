@@ -1,11 +1,11 @@
 import Link from "next/link";
 import CheckInPrompt from "./checkin-prompt";
 import GoalSummary from "./goal-summary";
+import ReportNudge from "./report-nudge";
 import SignOut from "./sign-out";
 
 const comingSoon = [
   "Favorites and recipe import",
-  "Coach share link and weekly reports",
 ];
 
 export default function Home() {
@@ -14,6 +14,7 @@ export default function Home() {
       <h1 className="text-2xl font-semibold">Food Planner</h1>
       <p className="mt-1 text-sm text-muted">Plan your week with Maia.</p>
       <CheckInPrompt />
+      <ReportNudge />
       <GoalSummary />
       <Link
         href="/today"
@@ -26,6 +27,12 @@ export default function Home() {
         className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
       >
         Plan the week with Maia →
+      </Link>
+      <Link
+        href="/report"
+        className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
+      >
+        Weekly reports and coach link →
       </Link>
       <section className="mt-8">
         <h2 className="text-sm font-medium text-muted">Coming next</h2>

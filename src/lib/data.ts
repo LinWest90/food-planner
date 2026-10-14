@@ -5,6 +5,8 @@ import type { CyclePhase } from "./cycle";
 import { DEFAULT_GOAL_INPUT, type GoalInput } from "./goals";
 import type { PlanningMode } from "./maia/prompt";
 import { toIsoDate, type WeekPlan } from "./plan";
+import type { ReportNarrative } from "./maia/report-prompt";
+import type { WeekStats } from "./report";
 import { supabase } from "./supabase";
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -112,4 +114,67 @@ export async function saveDayLog(date: string, log: DayLog): Promise<void> {
       .from("day_logs")
       .upsert({ user_id: await userId(), date, check_ins: log.checkIns, extras: log.extras }),
   );
+}
+
+export interface SavedReport {
+  week_start: string;
+  stats: WeekStats;
+  narrative: ReportNarrative;
+  updated_at: string;
+}
+
+export async function fetchReports(): Promise<SavedReport[]> {
+  return (
+    check(
+      await supabase()
+        .from("weekly_reports")
+        .select("week_start, stats, narrative, updated_at")
+        .order("week_start", { ascending: false })
+        .limit(12)
+        .returns<SavedReport[]>(),
+    ) ?? []
+  );
+}
+
+/** Weeks that have a plan, newest first. */
+export async function fetchRecentWeeks(limit = 6): Promise<PlanningSession[]> {
+  const rows = check(
+    await supabase()
+      .from("week_plans")
+      .select("*")
+      .not("plan", "is", null)
+      .order("week_start", { ascending: false })
+      .limit(limit)
+      .returns<WeekRow[]>(),
+  );
+  return (rows ?? []).map(fromWeekRow);
+}
+
+export async function fetchCoachToken(): Promise<string | null> {
+  const row = check(await supabase().from("coach_shares").select("token").maybeSingle());
+  return row?.token ?? null;
+}
+
+/** Creates the coach link, or replaces it (the old link stops working). */
+export async function createCoachToken(): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  check(await supabase().from("coach_shares").upsert({ user_id: await userId(), token }));
+  return token;
+}
+
+export async function deleteCoachToken(): Promise<void> {
+  check(await supabase().from("coach_shares").delete().eq("user_id", await userId()));
+}
+
+export interface CoachView {
+  goal: GoalInput | null;
+  weeks: { week_start: string; phases: CyclePhase[]; mode: PlanningMode; plan: WeekPlan | null }[];
+  logs: FoodLog;
+  reports: SavedReport[];
+}
+
+/** The coach's read-only view, by share token. Works without signing in. */
+export async function fetchCoachView(token: string): Promise<CoachView | null> {
+  return check(await supabase().rpc("coach_view", { p_token: token })) as CoachView | null;
 }

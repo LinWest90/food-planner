@@ -7,8 +7,13 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 /** Shows the sign-in screen until there's a session, then the app. */
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  // The coach's share page is public by design: the link itself is the key.
+  const [isCoachPage, setIsCoachPage] = useState(false);
 
   useEffect(() => {
+    // The address is only known in the browser (pages are prerendered).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsCoachPage(window.location.pathname.startsWith("/coach/"));
     if (!isSupabaseConfigured) return;
     const auth = supabase().auth;
     auth.getSession().then(({ data }) => setSession(data.session));
@@ -27,6 +32,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       </main>
     );
   }
+  if (isCoachPage) return <div className="flex flex-1 flex-col">{children}</div>;
   if (session === undefined) return null;
   if (session === null) return <SignIn />;
   // Remount the app when the signed-in user changes so nothing carries over.

@@ -21,8 +21,9 @@ take priority over `.env.local`.
 ## Setting up Supabase
 
 1. **Create the tables.** In your Supabase project, open the SQL editor and
-   run `supabase/migrations/20261014120000_init.sql`. Alternatively, run
-   `npx supabase link` and then `npx supabase db push`.
+   run each file in `supabase/migrations/` once, oldest first
+   (`20261014120000_init.sql`, then `20261015120000_coach_and_reports.sql`).
+   Alternatively, run `npx supabase link` and then `npx supabase db push`.
 2. **Create your account.** In Authentication → Users, add a user with your
    email and a password. The app has no sign-up screen.
 3. **Turn off sign-ups** in the Authentication settings ("Allow new users to
@@ -101,7 +102,16 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       only their file ids. Maia reads label values, says what she read,
       and asks again if a label is unreadable. Check-ins take photos too
       (of the meal, menu or label), with or without a note.
-- [ ] Coach share link and weekly report
+- [x] **Weekly reports** (`/report`). The app computes the week's numbers
+      (meals checked in, % as planned, average kcal and protein on fully
+      logged days, what changed), and Maia writes a short summary, wins,
+      things to watch and next-week focus. Written automatically the first
+      time the app is opened after a week ends, or on demand.
+- [x] **Coach link** (`/coach/<token>`). A private read-only page (no
+      account needed) with targets, recent plans, check-ins and reports,
+      but not the Maia chat. It can be created, replaced or turned off from
+      `/report`. The page reads data only through the `coach_view` database
+      function, which returns nothing for an unknown token.
 
 ## Planned architecture
 
@@ -130,8 +140,10 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 - **Reminders**: meal check-ins as web push notifications. iOS supports
   these only for web apps added to the home screen (iOS 16.4+), so this
   needs testing on a real phone.
-- **Weekly report**: a scheduled job every Sunday writes the report and
-  updates the coach's share link page.
+- **Weekly report timing**: reports are written when the app is next
+  opened after the week ends. A scheduled job (Vercel Cron) could write
+  them even if the app isn't opened, but it would need the Supabase
+  service-role key on the server.
 
 ### Cycle phases
 
