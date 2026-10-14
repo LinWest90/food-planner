@@ -10,6 +10,35 @@ import {
   type GoalInput,
 } from "@/lib/goals";
 import { loadGoalInput, saveGoalInput } from "@/lib/storage";
+import { KG_PER_LB, cmToFeetInches, feetInchesToCm, kgToLb, lbToKg, round1 } from "@/lib/units";
+
+// The form is edited in US units; GoalInput (what's saved) is metric.
+type FormState = Omit<GoalInput, "heightCm" | "weightKg" | "targetWeightKg"> & {
+  heightFt: number;
+  heightIn: number;
+  weightLb: number;
+  targetWeightLb: number;
+};
+
+function toFormState({ heightCm, weightKg, targetWeightKg, ...rest }: GoalInput): FormState {
+  const { feet, inches } = cmToFeetInches(heightCm);
+  return {
+    ...rest,
+    heightFt: feet,
+    heightIn: inches,
+    weightLb: round1(kgToLb(weightKg)),
+    targetWeightLb: round1(kgToLb(targetWeightKg)),
+  };
+}
+
+function toGoalInput({ heightFt, heightIn, weightLb, targetWeightLb, ...rest }: FormState): GoalInput {
+  return {
+    ...rest,
+    heightCm: feetInchesToCm(heightFt, heightIn),
+    weightKg: lbToKg(weightLb),
+    targetWeightKg: lbToKg(targetWeightLb),
+  };
+}
 
 const inputClass =
   "mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-base";
@@ -18,11 +47,13 @@ function NumberField({
   label,
   value,
   step = 1,
+  hint,
   onChange,
 }: {
   label: string;
   value: number;
   step?: number;
+  hint?: string;
   onChange: (n: number) => void;
 }) {
   return (
@@ -36,29 +67,34 @@ function NumberField({
         onChange={(e) => onChange(e.target.valueAsNumber)}
         className={inputClass}
       />
+      {hint && <span className="mt-1 block text-xs font-normal text-muted">{hint}</span>}
     </label>
   );
 }
 
 export default function GoalForm() {
-  const [input, setInput] = useState<GoalInput>(DEFAULT_GOAL_INPUT);
+  const [form, setForm] = useState<FormState>(() => toFormState(DEFAULT_GOAL_INPUT));
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const stored = loadGoalInput();
     // Hydrate from device storage after mount; it isn't available on the server.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (stored) setInput(stored);
+    if (stored) setForm(toFormState(stored));
   }, []);
 
-  const set = <K extends keyof GoalInput>(key: K, value: GoalInput[K]) => {
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setSaved(false);
-    setInput((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const valid = [input.ageYears, input.heightCm, input.weightKg, input.targetWeightKg, input.weeks].every(
-    (n) => Number.isFinite(n) && n > 0,
-  );
+  const valid =
+    [form.ageYears, form.heightFt, form.weightLb, form.targetWeightLb, form.weeks].every(
+      (n) => Number.isFinite(n) && n > 0,
+    ) &&
+    Number.isFinite(form.heightIn) &&
+    form.heightIn >= 0;
+  const input = toGoalInput(form);
   const result = valid ? calculateGoals(input) : null;
 
   return (
@@ -74,7 +110,7 @@ export default function GoalForm() {
         <label className="col-span-2 block text-sm font-medium">
           Sex (for the calorie formula)
           <select
-            value={input.sex}
+            value={form.sex}
             onChange={(e) => set("sex", e.target.value as GoalInput["sex"])}
             className={inputClass}
           >
@@ -82,20 +118,31 @@ export default function GoalForm() {
             <option value="male">Male</option>
           </select>
         </label>
-        <NumberField label="Age" value={input.ageYears} onChange={(n) => set("ageYears", n)} />
-        <NumberField label="Height (cm)" value={input.heightCm} onChange={(n) => set("heightCm", n)} />
-        <NumberField label="Weight (kg)" value={input.weightKg} step={0.1} onChange={(n) => set("weightKg", n)} />
+        <NumberField label="Age" value={form.ageYears} onChange={(n) => set("ageYears", n)} />
+        <NumberField label="Time frame (weeks)" value={form.weeks} onChange={(n) => set("weeks", n)} />
+        <NumberField label="Height (ft)" value={form.heightFt} onChange={(n) => set("heightFt", n)} />
+        <NumberField label="Height (in)" value={form.heightIn} step={0.5} onChange={(n) => set("heightIn", n)} />
+        <p className="col-span-2 -mt-1 text-xs text-muted">
+          = {valid ? `${Math.round(input.heightCm)} cm` : "–"}
+        </p>
         <NumberField
-          label="Goal weight (kg)"
-          value={input.targetWeightKg}
+          label="Weight (lb)"
+          value={form.weightLb}
           step={0.1}
-          onChange={(n) => set("targetWeightKg", n)}
+          hint={Number.isFinite(input.weightKg) ? `= ${round1(input.weightKg)} kg` : undefined}
+          onChange={(n) => set("weightLb", n)}
         />
-        <NumberField label="Time frame (weeks)" value={input.weeks} onChange={(n) => set("weeks", n)} />
+        <NumberField
+          label="Goal weight (lb)"
+          value={form.targetWeightLb}
+          step={0.1}
+          hint={Number.isFinite(input.targetWeightKg) ? `= ${round1(input.targetWeightKg)} kg` : undefined}
+          onChange={(n) => set("targetWeightLb", n)}
+        />
         <label className="col-span-2 block text-sm font-medium">
           Activity
           <select
-            value={input.activity}
+            value={form.activity}
             onChange={(e) => set("activity", e.target.value as ActivityLevel)}
             className={inputClass}
           >
@@ -113,13 +160,14 @@ export default function GoalForm() {
         <div className="mt-3 grid grid-cols-2 gap-3">
           <NumberField
             label="Protein (g per kg)"
-            value={input.proteinPerKg}
+            value={form.proteinPerKg}
             step={0.1}
+            hint={Number.isFinite(form.proteinPerKg) ? `= ${round1(form.proteinPerKg * KG_PER_LB)} g per lb` : undefined}
             onChange={(n) => set("proteinPerKg", n)}
           />
           <NumberField
             label="Fat (% of kcal)"
-            value={Math.round(input.fatShare * 100)}
+            value={Math.round(form.fatShare * 100)}
             onChange={(n) => set("fatShare", n / 100)}
           />
         </div>
@@ -145,7 +193,8 @@ export default function GoalForm() {
           </dl>
           <p className="mt-3 text-xs text-muted">
             Estimated maintenance {result.tdee} kcal ({result.dailyAdjustment > 0 ? "+" : ""}
-            {result.dailyAdjustment} kcal/day for {result.weeklyChangeKg} kg/week). These are estimates;
+            {result.dailyAdjustment} kcal/day for {round1(kgToLb(result.weeklyChangeKg))} lb /{" "}
+            {result.weeklyChangeKg} kg per week). These are estimates;
             adjust with your coach based on real progress.
           </p>
           {result.warnings.length > 0 && (

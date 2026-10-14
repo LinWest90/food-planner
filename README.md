@@ -23,7 +23,8 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 | Users | Just me + my coach |
 | Coach access | Private read-only share link |
 | AI | Claude (Anthropic API), called only from the server |
-| Cycle data | Sync from an iPhone cycle-tracking app (which app is still open) |
+| Cycle data | Natural Cycles → Apple Health → app (see below) |
+| Language / units | English; lb and ft/in, with kg/cm shown alongside (stored in metric) |
 
 ## Status
 
@@ -65,12 +66,21 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 
 ### Cycle sync
 
-A web app can't read Apple Health directly. The plan is an **Apple
-Shortcuts** automation that reads cycle data and posts it to a private
-app endpoint. Two things are still unconfirmed:
+A web app can't read Apple Health directly. The plan is:
 
-1. whether the cycle app writes period data to Apple Health, and
-2. whether Shortcuts can read menstrual data from Health.
+1. **Natural Cycles → Apple Health.** Natural Cycles' help centre says it
+   can export period flow (and spotting, cervical mucus, ovulation tests)
+   to Apple Health, under *Settings → Integrations*. The export runs when
+   the NC app is opened. Temperature does not sync.
+   ([How to sync with Apple Health](https://help.naturalcycles.com/hc/en-us/articles/4405598610577-How-to-sync-with-Apple-Health))
+2. **Apple Health → app.** An Apple **Shortcuts** automation reads recent
+   menstrual flow samples and posts the period start dates to a private
+   app endpoint. **Not yet confirmed:** that the Shortcuts *Find Health
+   Samples* action can read menstrual flow. This needs testing on the
+   phone.
+3. **Phase estimate.** NC's fertility status and confirmed ovulation don't
+   reach Health, so the app estimates the cycle phase from period start
+   dates and average cycle length. That's an approximation.
 
 Manual "period started" logging will be built as a fallback either way.
 

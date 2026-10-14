@@ -52,13 +52,14 @@ export interface GoalResult {
   warnings: string[];
 }
 
+// Starting values for the form: 5 ft 6 in, 150 lb → 141 lb.
 export const DEFAULT_GOAL_INPUT: GoalInput = {
   sex: "female",
   ageYears: 30,
-  heightCm: 168,
-  weightKg: 68,
+  heightCm: 167.64,
+  weightKg: 68.04,
   activity: "moderate",
-  targetWeightKg: 64,
+  targetWeightKg: 63.96,
   weeks: 12,
   proteinPerKg: 1.8,
   fatShare: 0.3,
