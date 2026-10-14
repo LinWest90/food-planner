@@ -17,7 +17,9 @@ const TotalsSchema = z.object({
 
 const RequestSchema = z.object({
   date: z.string(),
-  description: z.string().min(1).max(2000),
+  description: z.string().max(2000),
+  // Photos uploaded through /api/maia/upload, by Files API id.
+  imageFileIds: z.array(z.string().regex(/^file_[A-Za-z0-9_-]+$/)).max(4).default([]),
   /** The planned meal this replaces; absent for extra food. */
   replaces: MealSchema.nullable(),
   target: TotalsSchema,
@@ -45,7 +47,10 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  const { date, description, replaces, target, eatenToday, remaining } = parsed.data;
+  const { date, description, imageFileIds, replaces, target, eatenToday, remaining } = parsed.data;
+  if (!description.trim() && imageFileIds.length === 0) {
+    return Response.json({ error: "Describe what you ate or add a photo." }, { status: 400 });
+  }
 
   const prompt = [
     `Today is ${date}.`,
@@ -60,7 +65,12 @@ export async function POST(request: Request) {
       ? remaining.map((r) => `${r.date} / ${r.index} / ${r.meal.slot} / ${describeMeal(r.meal)}`).join("\n")
       : "(none)",
     "",
-    `What she ate instead, in her words:\n"""${description}"""`,
+    imageFileIds.length
+      ? `She attached ${imageFileIds.length === 1 ? "a photo" : `${imageFileIds.length} photos`} of what she ate (above).`
+      : "",
+    description.trim()
+      ? `What she ate instead, in her words:\n"""${description.trim()}"""`
+      : "She didn't add a description; go by the photo.",
   ].join("\n");
 
   try {
@@ -71,7 +81,17 @@ export async function POST(request: Request) {
       ...fallbackParams(),
       output_config: { effort: "medium", format: betaZodOutputFormat(CheckInResponseSchema) },
       system: CHECKIN_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: [
+            ...imageFileIds.map(
+              (file_id): Anthropic.Beta.BetaImageBlockParam => ({ type: "image", source: { type: "file", file_id } }),
+            ),
+            { type: "text", text: prompt },
+          ],
+        },
+      ],
     });
 
     if (response.stop_reason === "refusal" || !response.parsed_output) {

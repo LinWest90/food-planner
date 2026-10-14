@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import AutoGrowTextarea from "@/components/auto-grow-textarea";
+import { AddPhotoButton, PhotoPreviews, usePhotos } from "@/components/photo-picker";
 import RichText from "@/components/rich-text";
 import type { CheckInResult } from "@/app/api/checkin/route";
 import {
@@ -27,6 +28,7 @@ import {
   type PlanningSession,
 } from "@/lib/data";
 import { authHeaders } from "@/lib/supabase";
+import { uploadPhoto } from "@/lib/upload";
 
 const DATE_LABEL = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" });
 
@@ -118,7 +120,11 @@ export default function Today() {
   const removeExtra = (i: number) => updateLog({ ...dayLog, extras: dayLog.extras.filter((_, j) => j !== i) });
 
   /** Asks Maia to estimate what was eaten and rebalance the rest of the week. Returns true on success. */
-  async function logWithMaia(description: string, replaces: { index: number; meal: Meal } | null) {
+  async function logWithMaia(
+    description: string,
+    photos: Blob[],
+    replaces: { index: number; meal: Meal } | null,
+  ) {
     setBusy(true);
     setError(null);
     setSuggestion(null);
@@ -135,12 +141,15 @@ export default function Today() {
         })
         .slice(0, 40);
 
+      const auth = await authHeaders();
+      const imageFileIds = await Promise.all(photos.map((photo) => uploadPhoto(photo, auth)));
       const res = await fetch("/api/checkin", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        headers: { "Content-Type": "application/json", ...auth },
         body: JSON.stringify({
           date,
           description,
+          imageFileIds,
           replaces: replaces?.meal ?? null,
           target,
           eatenToday: progress.eaten,
@@ -291,7 +300,7 @@ export default function Today() {
               due={due.has(index)}
               busy={busy}
               onYes={() => markAsPlanned(index, meal)}
-              onNo={(text) => logWithMaia(text, { index, meal })}
+              onNo={(text, photos) => logWithMaia(text, photos, { index, meal })}
               onUndo={() => clearCheckIn(index)}
             />
           ))}
@@ -318,7 +327,7 @@ export default function Today() {
           placeholder="e.g. a latte and a handful of almonds"
           submitLabel="Log it"
           busy={busy}
-          onSubmit={(text) => logWithMaia(text, null)}
+          onSubmit={(text, photos) => logWithMaia(text, photos, null)}
         />
       </section>
     </div>
@@ -341,7 +350,7 @@ function MealCheckIn({
   due: boolean;
   busy: boolean;
   onYes: () => void;
-  onNo: (description: string) => Promise<boolean>;
+  onNo: (description: string, photos: Blob[]) => Promise<boolean>;
   onUndo: () => void;
 }) {
   const [describing, setDescribing] = useState(false);
@@ -371,8 +380,8 @@ function MealCheckIn({
           placeholder="What did you eat instead?"
           submitLabel="Tell Maia"
           busy={busy}
-          onSubmit={async (text) => {
-            const ok = await onNo(text);
+          onSubmit={async (text, photos) => {
+            const ok = await onNo(text, photos);
             if (ok) setDescribing(false);
             return ok;
           }}
@@ -415,36 +424,46 @@ function DescribeFood({
   placeholder: string;
   submitLabel: string;
   busy: boolean;
-  /** Resolve to false to keep the text (e.g. the request failed). */
-  onSubmit: (text: string) => Promise<boolean>;
+  /** Resolve to false to keep the text and photos (e.g. the request failed). */
+  onSubmit: (text: string, photos: Blob[]) => Promise<boolean>;
   onCancel?: () => void;
 }) {
   const [text, setText] = useState("");
+  const photos = usePhotos(4);
+  const canSend = !busy && (text.trim() !== "" || photos.photos.length > 0);
   return (
     <form
       className="mt-2 space-y-2"
       onSubmit={async (e) => {
         e.preventDefault();
-        const value = text.trim();
-        if (!value || busy) return;
-        if (await onSubmit(value)) setText("");
+        if (!canSend) return;
+        const sending = photos.take();
+        if (await onSubmit(text.trim(), sending.map((p) => p.blob))) {
+          setText("");
+          photos.release(sending);
+        } else {
+          photos.restore(sending);
+        }
       }}
     >
       <AutoGrowTextarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={2}
-        placeholder={placeholder}
+        placeholder={photos.photos.length ? "Add a note (optional)" : placeholder}
         className="w-full rounded-lg border border-line bg-background px-3 py-2 text-base"
       />
-      <div className="flex gap-2">
+      <PhotoPreviews photos={photos.photos} onRemove={photos.remove} />
+      {photos.error && <p className="text-xs text-warn">⚠️ {photos.error}</p>}
+      <div className="flex flex-wrap gap-2">
         <button
           type="submit"
-          disabled={busy || !text.trim()}
+          disabled={!canSend}
           className="rounded-full bg-accent px-4 py-1.5 text-sm text-on-accent disabled:opacity-50"
         >
           {busy ? "Maia is logging…" : submitLabel}
         </button>
+        <AddPhotoButton onPick={photos.add} disabled={busy || photos.full} label="Photo" />
         {onCancel && (
           <button type="button" onClick={onCancel} className="rounded-full border border-line px-4 py-1.5 text-sm">
             Cancel

@@ -14,6 +14,7 @@ import {
   type PlanningSession,
 } from "@/lib/data";
 import { authHeaders } from "@/lib/supabase";
+import { uploadPhoto } from "@/lib/upload";
 import ChatView from "./chat-view";
 import PlanView from "./plan-view";
 
@@ -22,16 +23,6 @@ type Tab = (typeof TABS)[number];
 
 function newSession(weekStart: string): PlanningSession {
   return { weekStart, phases: [], mode: "prep", history: [], plan: null };
-}
-
-/** Uploads one photo for Maia and returns its file id. */
-async function uploadPhoto(photo: Blob, auth: Record<string, string>): Promise<string> {
-  const form = new FormData();
-  form.append("file", photo, "photo.jpg");
-  const res = await fetch("/api/maia/upload", { method: "POST", headers: auth, body: form });
-  const body = await res.json().catch(() => null);
-  if (!res.ok || !body?.fileId) throw new Error(body?.error ?? `Photo upload failed (${res.status})`);
-  return body.fileId;
 }
 
 function addDays(isoDate: string, days: number): string {

@@ -99,7 +99,8 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       nutrition labels, packaging, recipes or meals. Photos are shrunk on
       the phone, stored with Anthropic's Files API, and the chat keeps
       only their file ids. Maia reads label values, says what she read,
-      and asks again if a label is unreadable.
+      and asks again if a label is unreadable. Check-ins take photos too
+      (of the meal, menu or label), with or without a note.
 - [ ] Coach share link and weekly report
 
 ## Planned architecture

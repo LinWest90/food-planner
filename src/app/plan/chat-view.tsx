@@ -1,10 +1,10 @@
 "use client";
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import AutoGrowTextarea from "@/components/auto-grow-textarea";
+import { AddPhotoButton, PhotoPreviews, usePhotos } from "@/components/photo-picker";
 import RichText from "@/components/rich-text";
-import { prepareImage, type PreparedImage } from "@/lib/images";
 
 const MAX_PHOTOS = 4;
 
@@ -56,40 +56,24 @@ export default function ChatView({
   onSend: (message: string, photos: Blob[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState("");
-  const [photos, setPhotos] = useState<PreparedImage[]>([]);
-  const [photoError, setPhotoError] = useState<string | null>(null);
   const [pending, setPending] = useState<Bubble | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const photos = usePhotos(MAX_PHOTOS);
 
   const bubbles = toBubbles(history);
   // Show the sent message right away, until it lands in history.
   const shown = busy && pending ? [...bubbles, pending] : bubbles;
 
-  async function addPhotos(files: FileList | null) {
-    setPhotoError(null);
-    const picked = Array.from(files ?? []).slice(0, MAX_PHOTOS - photos.length);
-    if ((files?.length ?? 0) > picked.length) setPhotoError(`Up to ${MAX_PHOTOS} photos per message.`);
-    try {
-      const prepared = await Promise.all(picked.map(prepareImage));
-      setPhotos((p) => [...p, ...prepared]);
-    } catch (err) {
-      setPhotoError((err as Error).message);
-    }
-  }
-
   async function submit(text: string) {
     const message = text.trim();
-    if ((!message && photos.length === 0) || busy) return;
-    const sending = photos;
+    if ((!message && photos.photos.length === 0) || busy) return;
+    const sending = photos.take();
     setPending({ role: "user", text: message, previews: sending.map((p) => p.previewUrl) });
     setDraft("");
-    setPhotos([]);
     const ok = await onSend(message, sending.map((p) => p.blob));
-    if (ok) {
-      sending.forEach((p) => URL.revokeObjectURL(p.previewUrl));
-    } else {
+    if (ok) photos.release(sending);
+    else {
       setDraft(message);
-      setPhotos(sending);
+      photos.restore(sending);
     }
     setPending(null);
   }
@@ -129,49 +113,10 @@ export default function ChatView({
           submit(draft);
         }}
       >
-        {photos.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto">
-            {photos.map((p, i) => (
-              <div key={p.previewUrl} className="relative shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
-                <img src={p.previewUrl} alt={`Photo ${i + 1}`} className="h-16 w-16 rounded-lg object-cover" />
-                <button
-                  type="button"
-                  aria-label={`Remove photo ${i + 1}`}
-                  onClick={() => {
-                    URL.revokeObjectURL(p.previewUrl);
-                    setPhotos((all) => all.filter((x) => x !== p));
-                  }}
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-xs text-background"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {photoError && <p className="text-xs text-warn">⚠️ {photoError}</p>}
+        <PhotoPreviews photos={photos.photos} onRemove={photos.remove} />
+        {photos.error && <p className="text-xs text-warn">⚠️ {photos.error}</p>}
         <div className="flex items-end gap-2">
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              addPhotos(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            aria-label="Add a photo"
-            disabled={busy || photos.length >= MAX_PHOTOS}
-            onClick={() => fileInput.current?.click()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-lg disabled:opacity-50"
-          >
-            📷
-          </button>
+          <AddPhotoButton onPick={photos.add} disabled={busy || photos.full} />
           <AutoGrowTextarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -182,12 +127,12 @@ export default function ChatView({
               }
             }}
             rows={1}
-            placeholder={photos.length ? "Add a note (optional)" : "Message Maia"}
+            placeholder={photos.photos.length ? "Add a note (optional)" : "Message Maia"}
             className="min-w-0 flex-1 rounded-2xl border border-line bg-surface px-3 py-2 text-base"
           />
           <button
             type="submit"
-            disabled={busy || (!draft.trim() && photos.length === 0)}
+            disabled={busy || (!draft.trim() && photos.photos.length === 0)}
             className="rounded-full bg-accent px-4 py-2 font-medium text-on-accent disabled:opacity-50"
           >
             Send
