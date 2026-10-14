@@ -2,6 +2,8 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { useState } from "react";
+import AutoGrowTextarea from "@/components/auto-grow-textarea";
+import RichText from "@/components/rich-text";
 
 interface Bubble {
   role: "user" | "assistant";
@@ -86,13 +88,13 @@ export default function ChatView({
       </div>
 
       <form
-        className="sticky bottom-0 mt-4 flex gap-2 bg-background py-2"
+        className="sticky bottom-0 mt-4 flex items-end gap-2 bg-background py-2"
         onSubmit={(e) => {
           e.preventDefault();
           submit(draft);
         }}
       >
-        <textarea
+        <AutoGrowTextarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -103,12 +105,12 @@ export default function ChatView({
           }}
           rows={1}
           placeholder="Message Maia"
-          className="flex-1 resize-none rounded-2xl border border-line bg-surface px-3 py-2 text-base"
+          className="flex-1 rounded-2xl border border-line bg-surface px-3 py-2 text-base"
         />
         <button
           type="submit"
           disabled={busy || !draft.trim()}
-          className="rounded-full bg-accent px-4 font-medium text-on-accent disabled:opacity-50"
+          className="self-end rounded-full bg-accent px-4 py-2 font-medium text-on-accent disabled:opacity-50"
         >
           Send
         </button>
@@ -118,13 +120,16 @@ export default function ChatView({
 }
 
 function Message({ role, text }: Bubble) {
+  if (role === "user") {
+    return (
+      <div className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl bg-accent px-3 py-2 text-sm text-on-accent">
+        {text}
+      </div>
+    );
+  }
   return (
-    <div
-      className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
-        role === "user" ? "ml-auto bg-accent text-on-accent" : "bg-surface border border-line"
-      }`}
-    >
-      {text}
+    <div className="max-w-[92%] rounded-2xl border border-line bg-surface px-3.5 py-2.5 text-sm leading-relaxed">
+      <RichText text={text} />
     </div>
   );
 }

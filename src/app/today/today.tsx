@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import AutoGrowTextarea from "@/components/auto-grow-textarea";
+import RichText from "@/components/rich-text";
 import type { CheckInResult } from "@/app/api/checkin/route";
 import {
   EMPTY_DAY_LOG,
@@ -234,7 +236,9 @@ export default function Today() {
       {suggestion && (
         <section className="mt-4 rounded-xl border border-accent bg-surface p-4 text-sm">
           <p className="font-medium">Maia</p>
-          <p className="mt-1">{suggestion.message}</p>
+          <div className="mt-1 leading-relaxed">
+            <RichText text={suggestion.message} />
+          </div>
           <p className="mt-2 text-xs text-muted">
             Logged: {suggestion.ate.name} · {macroLine(suggestion.ate)}
           </p>
@@ -426,7 +430,7 @@ function DescribeFood({
         if (await onSubmit(value)) setText("");
       }}
     >
-      <textarea
+      <AutoGrowTextarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={2}

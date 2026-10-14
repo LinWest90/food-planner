@@ -60,15 +60,31 @@ export default function PlanView({
   }
 
   if (view === "Prep") {
+    // One card per session ("Wednesday evening prep"), steps numbered in order.
+    const sessions: { when: string; tasks: string[] }[] = [];
+    for (const t of plan.prepTasks) {
+      const last = sessions.at(-1);
+      if (last && last.when === t.when) last.tasks.push(t.task);
+      else sessions.push({ when: t.when, tasks: [t.task] });
+    }
     return (
-      <ol className="space-y-2">
-        {plan.prepTasks.map((t, i) => (
-          <li key={i} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm">
-            <span className="block text-xs text-muted">{t.when}</span>
-            {t.task}
-          </li>
+      <div className="space-y-4">
+        {sessions.map((session, i) => (
+          <section key={i} className="rounded-xl border border-line bg-surface p-4">
+            <h2 className="font-semibold">{session.when}</h2>
+            <ol className="mt-3 space-y-3">
+              {session.tasks.map((task, j) => (
+                <li key={j} className="flex gap-3 text-sm leading-relaxed">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold tabular-nums">
+                    {j + 1}
+                  </span>
+                  <span className="pt-0.5">{task}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
         ))}
-      </ol>
+      </div>
     );
   }
 
