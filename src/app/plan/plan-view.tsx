@@ -55,7 +55,8 @@ export default function PlanView({
           <section key={category}>
             <h2 className="text-sm font-semibold">{category}</h2>
             <ul className="mt-1 divide-y divide-line rounded-lg border border-line bg-surface">
-              {items.map((i) => (
+              {/* Still to buy first; ticked items sink to the bottom, otherwise in list order. */}
+              {[...items.filter((i) => !i.done), ...items.filter((i) => i.done)].map((i) => (
                 <li key={i.index}>
                   <button
                     type="button"
