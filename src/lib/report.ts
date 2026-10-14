@@ -99,17 +99,15 @@ function addDays(isoDate: string, days: number): string {
 
 export const weekEnd = (weekStart: string) => addDays(weekStart, 6);
 
-/**
- * The newest finished week (ended before today, within the last two weeks)
- * that has a plan but no report yet, if any. Its report is written
- * automatically the first time the app is opened after the week ends.
- */
-export function weekNeedingReport(weekStarts: string[], reported: string[], today: string): string | null {
+/** Finished weeks (ended before today, within the last two weeks) that have a plan but no report. */
+export function weeksNeedingReports(weekStarts: string[], reported: string[], today: string): string[] {
   const twoWeeksAgo = addDays(today, -14);
-  return (
-    weekStarts
-      .filter((w) => weekEnd(w) < today && weekEnd(w) >= twoWeeksAgo && !reported.includes(w))
-      .sort()
-      .at(-1) ?? null
-  );
+  return weekStarts
+    .filter((w) => weekEnd(w) < today && weekEnd(w) >= twoWeeksAgo && !reported.includes(w))
+    .sort();
+}
+
+/** The newest of those, if any: written when the app is opened after a week ends. */
+export function weekNeedingReport(weekStarts: string[], reported: string[], today: string): string | null {
+  return weeksNeedingReports(weekStarts, reported, today).at(-1) ?? null;
 }

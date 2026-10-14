@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatDate } from "@/components/report-card";
-import { fetchRecentWeeks, fetchReports } from "@/lib/data";
+import { countUnreadCoachComments, fetchRecentWeeks, fetchReports } from "@/lib/data";
 import { toIsoDate } from "@/lib/plan";
 import { weekNeedingReport } from "@/lib/report";
 import { requestReport } from "@/lib/reports-client";
@@ -14,8 +14,12 @@ import { requestReport } from "@/lib/reports-client";
  */
 export default function ReportNudge() {
   const [state, setState] = useState<{ weekStart: string; done: boolean } | null>(null);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
+    countUnreadCoachComments()
+      .then(setUnread)
+      .catch(() => {});
     (async () => {
       const [weeks, reports] = await Promise.all([fetchRecentWeeks(3), fetchReports()]);
       const due = weekNeedingReport(
@@ -30,7 +34,19 @@ export default function ReportNudge() {
     })().catch(() => setState(null));
   }, []);
 
-  if (!state) return null;
+  return (
+    <>
+      {unread > 0 && (
+        <Link href="/report" className="mt-3 block rounded-xl bg-accent p-4 text-sm font-medium text-on-accent">
+          💬 {unread === 1 ? "New comment" : `${unread} new comments`} from your coach →
+        </Link>
+      )}
+      {state && <ReportLink state={state} />}
+    </>
+  );
+}
+
+function ReportLink({ state }: { state: { weekStart: string; done: boolean } }) {
   return (
     <Link href="/report" className="mt-3 block rounded-xl bg-accent-soft p-4 text-sm">
       {state.done

@@ -34,3 +34,14 @@ export function userClient(token: string): SupabaseClient {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
 }
+
+/**
+ * A Supabase client with full access, bypassing row level security. Only
+ * for the scheduled job, which has no signed-in user. Needs the project's
+ * secret key (SUPABASE_SECRET_KEY, or the older SUPABASE_SERVICE_ROLE_KEY).
+ */
+export function adminClient(): SupabaseClient | null {
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !key) return null;
+  return createClient(SUPABASE_URL, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}

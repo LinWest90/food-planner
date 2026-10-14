@@ -2,9 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import CommentThread from "@/components/comment-thread";
 import ReportCard from "@/components/report-card";
 import type { FoodLog } from "@/lib/checkins";
-import { fetchDayLogs, fetchGoalInput, fetchRecentWeeks, fetchReports, type PlanningSession, type SavedReport } from "@/lib/data";
+import {
+  addReply,
+  deleteComment,
+  fetchComments,
+  fetchDayLogs,
+  fetchGoalInput,
+  fetchRecentWeeks,
+  fetchReports,
+  markCoachCommentsRead,
+  type Comment,
+  type PlanningSession,
+  type SavedReport,
+} from "@/lib/data";
 import { calculateGoals } from "@/lib/goals";
 import { toIsoDate, type Totals } from "@/lib/plan";
 import { weekEnd, weekNeedingReport, weekStats } from "@/lib/report";
@@ -16,6 +29,7 @@ interface Loaded {
   weeks: PlanningSession[];
   logs: FoodLog;
   reports: SavedReport[];
+  comments: Comment[];
   today: string;
 }
 
@@ -40,7 +54,12 @@ export default function Reports() {
   useEffect(() => {
     (async () => {
       const today = toIsoDate(new Date());
-      const [goal, weeks, reports] = await Promise.all([fetchGoalInput(), fetchRecentWeeks(), fetchReports()]);
+      const [goal, weeks, reports, comments] = await Promise.all([
+        fetchGoalInput(),
+        fetchRecentWeeks(),
+        fetchReports(),
+        fetchComments(),
+      ]);
       if (!goal) throw new Error("Set your goal first.");
       const g = calculateGoals(goal);
       const oldest = weeks.at(-1)?.weekStart;
@@ -50,8 +69,11 @@ export default function Reports() {
         weeks,
         logs,
         reports,
+        comments,
         today,
       });
+      // They're on screen now (still marked "New" until the next visit).
+      markCoachCommentsRead().catch(() => {});
       // Write last week's report automatically if it's missing.
       const due = weekNeedingReport(
         weeks.map((w) => w.weekStart),
@@ -110,6 +132,28 @@ export default function Reports() {
                 )}
               </div>
             )}
+            <CommentThread
+              comments={data.comments.filter((c) => c.week_start === week.weekStart)}
+              viewer="me"
+              onAdd={async (body) => {
+                try {
+                  const added = await addReply(week.weekStart, body);
+                  setData((d) => d && { ...d, comments: [...d.comments, added] });
+                  return true;
+                } catch (err) {
+                  setError((err as Error).message);
+                  return false;
+                }
+              }}
+              onDelete={async (comment) => {
+                try {
+                  await deleteComment(comment.id);
+                  setData((d) => d && { ...d, comments: d.comments.filter((c) => c.id !== comment.id) });
+                } catch (err) {
+                  setError((err as Error).message);
+                }
+              }}
+            />
           </ReportCard>
         );
       })}

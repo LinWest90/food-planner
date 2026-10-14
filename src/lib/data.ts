@@ -167,11 +167,85 @@ export async function deleteCoachToken(): Promise<void> {
   check(await supabase().from("coach_shares").delete().eq("user_id", await userId()));
 }
 
+export interface Comment {
+  id: number;
+  week_start: string;
+  author: "coach" | "me";
+  author_name: string | null;
+  body: string;
+  created_at: string;
+  read_at?: string | null;
+}
+
+export async function fetchComments(): Promise<Comment[]> {
+  return (
+    check(
+      await supabase()
+        .from("coach_comments")
+        .select("id, week_start, author, author_name, body, created_at, read_at")
+        .order("created_at")
+        .returns<Comment[]>(),
+    ) ?? []
+  );
+}
+
+export async function addReply(weekStart: string, body: string): Promise<Comment> {
+  const added = check(
+    await supabase()
+      .from("coach_comments")
+      .insert({ user_id: await userId(), week_start: weekStart, author: "me", body })
+      .select("id, week_start, author, author_name, body, created_at, read_at")
+      .single<Comment>(),
+  );
+  if (!added) throw new Error("Couldn't save the reply.");
+  return added;
+}
+
+export async function deleteComment(id: number): Promise<void> {
+  check(await supabase().from("coach_comments").delete().eq("id", id));
+}
+
+/** Coach comments not seen yet. */
+export async function countUnreadCoachComments(): Promise<number> {
+  const { count, error } = await supabase()
+    .from("coach_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("author", "coach")
+    .is("read_at", null);
+  if (error) throw new Error(`Couldn't reach the database: ${error.message}`);
+  return count ?? 0;
+}
+
+export async function markCoachCommentsRead(): Promise<void> {
+  check(
+    await supabase()
+      .from("coach_comments")
+      .update({ read_at: new Date().toISOString() })
+      .eq("author", "coach")
+      .is("read_at", null),
+  );
+}
+
+/** Adds a comment as the coach, through the share link. */
+export async function addCoachComment(token: string, weekStart: string, body: string, name: string): Promise<Comment> {
+  const added = check(
+    await supabase().rpc("coach_add_comment", {
+      p_token: token,
+      p_week_start: weekStart,
+      p_body: body,
+      p_name: name,
+    }),
+  ) as Comment | null;
+  if (!added) throw new Error("This link isn't active any more.");
+  return added;
+}
+
 export interface CoachView {
   goal: GoalInput | null;
   weeks: { week_start: string; phases: CyclePhase[]; mode: PlanningMode; plan: WeekPlan | null }[];
   logs: FoodLog;
   reports: SavedReport[];
+  comments: Comment[];
 }
 
 /** The coach's read-only view, by share token. Works without signing in. */

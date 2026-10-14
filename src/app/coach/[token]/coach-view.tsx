@@ -2,13 +2,16 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import CommentThread from "@/components/comment-thread";
 import ReportCard, { formatDate } from "@/components/report-card";
 import { PHASE_LABELS } from "@/lib/cycle";
-import { fetchCoachView, type CoachView as CoachData } from "@/lib/data";
+import { addCoachComment, fetchCoachView, type Comment, type CoachView as CoachData } from "@/lib/data";
 import { calculateGoals, DEFAULT_GOAL_INPUT } from "@/lib/goals";
 import { toIsoDate } from "@/lib/plan";
 import { weekEnd, weekStats } from "@/lib/report";
 import { kgToLb, round1 } from "@/lib/units";
+
+const NAME_KEY = "food-planner:coach-name";
 
 const LONG_DAY = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" });
 
@@ -18,13 +21,24 @@ export default function CoachView() {
   const [data, setData] = useState<CoachData | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [today, setToday] = useState("");
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [coachName, setCoachName] = useState("");
+  const [commentError, setCommentError] = useState<string | null>(null);
 
   useEffect(() => {
-    // "Today" is only known in the browser.
+    // "Today" and the remembered name are only known in the browser.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setToday(toIsoDate(new Date()));
+    try {
+      setCoachName(localStorage.getItem(NAME_KEY) ?? "");
+    } catch {
+      // Storage unavailable; the name just isn't remembered.
+    }
     fetchCoachView(token)
-      .then(setData)
+      .then((view) => {
+        setData(view);
+        setComments(view?.comments ?? []);
+      })
       .catch((err: Error) => setError(err.message));
   }, [token]);
 
@@ -89,6 +103,31 @@ export default function CoachView() {
                 {week.mode === "prep" ? "Meal prep week" : "Cooking each meal"}
               </p>
             )}
+            <CommentThread
+              comments={comments.filter((c) => c.week_start === weekStart)}
+              viewer="coach"
+              coachName={coachName}
+              onCoachNameChange={(name) => {
+                setCoachName(name);
+                try {
+                  localStorage.setItem(NAME_KEY, name);
+                } catch {
+                  // Not remembered; fine.
+                }
+              }}
+              onAdd={async (body) => {
+                setCommentError(null);
+                try {
+                  const added = await addCoachComment(token, weekStart, body, coachName);
+                  setComments((all) => [...all, added]);
+                  return true;
+                } catch (err) {
+                  setCommentError((err as Error).message);
+                  return false;
+                }
+              }}
+            />
+            {commentError && <p className="mt-2 text-xs text-warn">⚠️ {commentError}</p>}
           </ReportCard>
         );
       })}
