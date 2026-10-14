@@ -1,5 +1,6 @@
 import { PHASE_LABELS } from "@/lib/cycle";
-import { sumMeals, type Totals, type WeekPlan } from "@/lib/plan";
+import { findFavorite, type Favorite } from "@/lib/favorites";
+import { sumMeals, type Meal, type Totals, type WeekPlan } from "@/lib/plan";
 
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" });
 
@@ -27,11 +28,15 @@ export default function PlanView({
   target,
   view,
   onToggle,
+  favorites,
+  onToggleFavorite,
 }: {
   plan: WeekPlan | null;
   target: Totals;
   view: "Plan" | "Shopping" | "Prep";
   onToggle: (list: "prepTasks" | "shoppingList", index: number) => void;
+  favorites: Favorite[];
+  onToggleFavorite: (meal: Meal) => void;
 }) {
   if (!plan) {
     return <p className="text-sm text-muted">No plan yet. Chat with Maia to make one.</p>;
@@ -162,7 +167,10 @@ export default function PlanView({
               {day.meals.map((meal, i) => (
                 <li key={i} className="text-sm">
                   <p className="text-xs uppercase tracking-wide text-muted">{meal.slot}</p>
-                  <p className="font-medium">{meal.name}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium">{meal.name}</p>
+                    <FavoriteStar saved={!!findFavorite(favorites, meal)} onClick={() => onToggleFavorite(meal)} />
+                  </div>
                   <p className="text-xs text-muted tabular-nums">
                     {Math.round(meal.calories)} kcal · P {Math.round(meal.proteinG)} · C {Math.round(meal.carbsG)} · F{" "}
                     {Math.round(meal.fatG)}
@@ -193,5 +201,19 @@ function Check({ done }: { done: boolean }) {
     >
       {done ? "✓" : ""}
     </span>
+  );
+}
+
+function FavoriteStar({ saved, onClick }: { saved: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={saved}
+      aria-label={saved ? "Remove from favorites" : "Save as favorite"}
+      onClick={onClick}
+      className={`-mr-1 -mt-1 shrink-0 px-1 text-lg leading-none ${saved ? "text-[#e0a100]" : "text-muted"}`}
+    >
+      {saved ? "★" : "☆"}
+    </button>
   );
 }

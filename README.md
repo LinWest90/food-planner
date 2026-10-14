@@ -23,7 +23,7 @@ take priority over `.env.local`.
 1. **Create the tables.** In your Supabase project, open the SQL editor and
    run each file in `supabase/migrations/` once, oldest first
    (`20261014120000_init.sql`, `20261015120000_coach_and_reports.sql`,
-   then `20261016120000_coach_comments.sql`).
+   `20261016120000_coach_comments.sql`, then `20261017120000_favorites.sql`).
    Alternatively, run `npx supabase link` and then `npx supabase db push`.
 2. **Create your account.** In Authentication → Users, add a user with your
    email and a password. The app has no sign-up screen.
@@ -103,7 +103,11 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       week plans (including the Maia chat) and check-ins are stored per
       user, protected by row level security, so they sync across devices.
       Maia's API routes check the sign-in token (and `ALLOWED_EMAILS`).
-- [ ] Favorites (breakfast / lunch / dinner / snacks) and recipes
+- [x] **Favorites** (`/favorites`), grouped as breakfast, lunch, dinner and
+      snacks. Save a planned meal with ☆/★ on the Plan tab, or describe one
+      (optionally with a photo) and Maia works out ingredients and macros
+      for you to review. Maia gets the list each time you plan and builds
+      the week around them, scaling portions to your targets.
 - [ ] Recipe import from a link (web pages; social posts depend on what
       each site exposes)
 - [x] **Photos for Maia** in the planning chat (📷, up to 4 per message):

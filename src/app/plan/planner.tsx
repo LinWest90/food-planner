@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MaiaEvent } from "@/app/api/maia/route";
 import { CYCLE_PHASES, PHASE_LABELS, type CyclePhase } from "@/lib/cycle";
 import { calculateGoals, type GoalResult } from "@/lib/goals";
-import { nextMonday, toIsoDate, toggleDone, type WeekPlan } from "@/lib/plan";
+import { nextMonday, toIsoDate, toggleDone, type Meal, type WeekPlan } from "@/lib/plan";
 import {
   fetchGoalInput,
   fetchWeek,
@@ -13,6 +13,8 @@ import {
   saveWeek,
   type PlanningSession,
 } from "@/lib/data";
+import { findFavorite, type Favorite } from "@/lib/favorites";
+import { addFavorite, deleteFavorite, fetchFavorites } from "@/lib/favorites-data";
 import { authHeaders } from "@/lib/supabase";
 import { uploadPhoto } from "@/lib/upload";
 import ChatView from "./chat-view";
@@ -42,6 +44,7 @@ export default function Planner() {
   const [tab, setTab] = useState<Tab>("Chat");
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
   // Saves only follow the user's own changes, one at a time, in order.
   const dirty = useRef(false);
   const saves = useRef(Promise.resolve());
@@ -56,6 +59,9 @@ export default function Planner() {
         fetchWeek(upcoming),
       ]);
       setGoal(input ? calculateGoals(input) : null);
+      fetchFavorites()
+        .then(setFavorites)
+        .catch(() => {});
       // On Sundays, default to planning the coming week.
       const isSunday = today.getDay() === 0;
       setSession((!isSunday && current) || next || current || newSession(upcoming));
@@ -187,6 +193,22 @@ export default function Planner() {
     }
   }
 
+  async function toggleFavorite(meal: Meal) {
+    setError(null);
+    try {
+      const saved = findFavorite(favorites, meal);
+      if (saved) {
+        await deleteFavorite(saved.id);
+        setFavorites((all) => all.filter((f) => f.id !== saved.id));
+      } else {
+        const added = await addFavorite(meal);
+        setFavorites((all) => [...all, added]);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   const startOver = () => {
     if (confirm("Start a new plan? This clears the chat and the current plan.")) {
       change((s) => ({ ...newSession(s.weekStart), phases: s.phases, mode: s.mode }));
@@ -273,6 +295,7 @@ export default function Planner() {
         ))}
       </nav>
 
+      {error && tab !== "Chat" && <p className="mt-3 rounded-lg bg-accent-soft p-3 text-sm text-warn">⚠️ {error}</p>}
       <div className="mt-4 flex flex-1 flex-col">
         {tab === "Chat" ? (
           <ChatView
@@ -288,6 +311,8 @@ export default function Planner() {
             target={target}
             view={tab}
             onToggle={(list, i) => change((s) => (s.plan ? { ...s, plan: toggleDone(s.plan, list, i) } : s))}
+            favorites={favorites}
+            onToggleFavorite={toggleFavorite}
           />
         )}
       </div>

@@ -7,7 +7,8 @@ import {
   SAVE_WEEK_PLAN_TOOL,
   planningContext,
 } from "@/lib/maia/prompt";
-import { requireUser } from "@/lib/server-auth";
+import { describeFavorites, type Favorite } from "@/lib/favorites";
+import { bearerToken, requireUser, userClient } from "@/lib/server-auth";
 import { WeekPlanSchema, describeTotals, type WeekPlan } from "@/lib/plan";
 
 // A full week plan can take a minute or two to write.
@@ -60,6 +61,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
   const { history, message, context, imageFileIds } = parsed.data;
+  // Her saved favorites, read as her (row level security applies).
+  const favorites = await userClient(bearerToken(request)!)
+    .from("favorites")
+    .select("id, slot, meal")
+    .order("created_at")
+    .returns<Favorite[]>();
   if (!message.trim() && imageFileIds.length === 0) {
     return Response.json({ error: "Write a message or add a photo." }, { status: 400 });
   }
@@ -76,7 +83,10 @@ export async function POST(request: Request) {
         {
           role: "user",
           content: [
-            { type: "text", text: planningContext(context) },
+            {
+              type: "text",
+              text: planningContext({ ...context, favorites: describeFavorites(favorites.data ?? []) }),
+            },
             ...imageFileIds.map(
               (file_id): Anthropic.Beta.BetaImageBlockParam => ({ type: "image", source: { type: "file", file_id } }),
             ),

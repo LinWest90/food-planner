@@ -5,7 +5,7 @@ import ReportNudge from "./report-nudge";
 import SignOut from "./sign-out";
 
 const comingSoon = [
-  "Favorites and recipe import",
+  "Recipe import from a link",
 ];
 
 export default function Home() {
@@ -27,6 +27,12 @@ export default function Home() {
         className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
       >
         Plan the week with Maia →
+      </Link>
+      <Link
+        href="/favorites"
+        className="mt-3 block rounded-xl border border-line bg-surface p-4 font-medium"
+      >
+        ⭐ Favorite meals →
       </Link>
       <Link
         href="/report"
