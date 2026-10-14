@@ -108,8 +108,13 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       (optionally with a photo) and Maia works out ingredients and macros
       for you to review. Maia gets the list each time you plan and builds
       the week around them, scaling portions to your targets.
-- [ ] Recipe import from a link (web pages; social posts depend on what
-      each site exposes)
+- [x] **Recipe import from a link** (Favorites → From a link). The server
+      fetches the page (public http/https addresses only, re-checked on each
+      redirect, 12 s and 3 MB limits), reads the schema.org Recipe that most
+      recipe sites embed (falling back to the page title, description and
+      text), and Maia writes up one serving with macros. Saved with the
+      steps and a link to the source. Social posts that need a login can't
+      be read; paste their caption as a description instead.
 - [x] **Photos for Maia** in the planning chat (📷, up to 4 per message):
       nutrition labels, packaging, recipes or meals. Photos are shrunk on
       the phone, stored with Anthropic's Files API, and the chat keeps

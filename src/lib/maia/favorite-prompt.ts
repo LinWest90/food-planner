@@ -7,7 +7,9 @@ export const FAVORITE_SYSTEM_PROMPT = `You are Maia, a practical food-planning a
 - calories, proteinG, carbsG, fatG: for that serving. Use label values from photos when given (scaled to the serving), otherwise typical USDA-style values. These are estimates.
 - note: one short sentence saying what you based the numbers on (for example "From the label: 150 kcal per bar" or "Typical values; portions assumed"), and any assumption she may want to check.
 
-If she describes several servings or a whole batch, write up one serving and say so in the note.`;
+If she describes several servings or a whole batch, write up one serving and say so in the note.
+
+When the input is a recipe imported from a web page: divide the whole-recipe ingredients by the number of servings it makes (state the split in the note, for example "Recipe makes 4; this is 1/4"). If the page gives nutrition per serving, use it and say so. If the servings aren't stated, assume a sensible number and say what you assumed. Keep the recipe's own name. If the page text has no recipe in it, say so in the note and return your best guess only if the text clearly describes a dish.`;
 
 // Kept free of numeric/format constraints so it works as a structured
 // output schema; the result is validated again with MealSchema.

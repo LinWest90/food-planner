@@ -1,7 +1,6 @@
 // Reads and writes favorite meals (see supabase/migrations/*_favorites.sql).
 import { check, userId } from "./data";
-import type { Favorite } from "./favorites";
-import type { Meal } from "./plan";
+import type { Favorite, FavoriteMeal } from "./favorites";
 import { supabase } from "./supabase";
 
 export async function fetchFavorites(): Promise<Favorite[]> {
@@ -13,8 +12,8 @@ export async function fetchFavorites(): Promise<Favorite[]> {
 }
 
 /** Saves a meal as a favorite (without plan-specific notes). */
-export async function addFavorite(meal: Meal): Promise<Favorite> {
-  const saved: Meal = { ...meal };
+export async function addFavorite(meal: FavoriteMeal): Promise<Favorite> {
+  const saved: FavoriteMeal = { ...meal };
   delete saved.why;
   const { data, error } = await supabase()
     .from("favorites")

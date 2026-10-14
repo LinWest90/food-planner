@@ -1,10 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
-import { FAVORITE_SYSTEM_PROMPT, FavoriteDraftSchema } from "@/lib/maia/favorite-prompt";
-import { MEAL_SLOTS, MealSchema } from "@/lib/plan";
+import { MISSING_KEY_ERROR } from "@/lib/maia/client";
+import { MEAL_SLOTS } from "@/lib/plan";
 import { requireUser } from "@/lib/server-auth";
+import { draftFavorite, DraftError } from "@/lib/server/draft-favorite";
 
 export const maxDuration = 120;
 
@@ -29,53 +27,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const response = await new Anthropic().beta.messages.parse({
-      model: MAIA_MODEL,
-      max_tokens: 16000,
-      ...fallbackParams(),
-      output_config: { effort: "medium", format: betaZodOutputFormat(FavoriteDraftSchema) },
-      system: FAVORITE_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            ...imageFileIds.map(
-              (file_id): Anthropic.Beta.BetaImageBlockParam => ({ type: "image", source: { type: "file", file_id } }),
-            ),
-            {
-              type: "text",
-              text: `Meal type: ${slot}\n\n${description.trim() ? `Her description:\n"""${description.trim()}"""` : "No description; go by the photo."}`,
-            },
-          ],
-        },
-      ],
-    });
-    const out = response.parsed_output;
-    if (response.stop_reason === "refusal" || !out) {
-      return Response.json({ error: "Maia couldn't work that one out. Try describing it differently." }, { status: 502 });
-    }
-    const clamp = (n: number) => Math.max(0, Math.round(n));
-    const meal = MealSchema.safeParse({
-      slot,
-      name: out.name,
-      ingredients: out.ingredients,
-      calories: clamp(out.calories),
-      proteinG: clamp(out.proteinG),
-      carbsG: clamp(out.carbsG),
-      fatG: clamp(out.fatG),
-    });
-    if (!meal.success) {
-      return Response.json({ error: "Maia's answer was incomplete. Please try again." }, { status: 502 });
-    }
-    return Response.json({ meal: meal.data, note: out.note });
+    const text = description.trim()
+      ? `Her description:\n"""${description.trim()}"""`
+      : "No description; go by the photo.";
+    return Response.json(await draftFavorite(slot, text, imageFileIds));
   } catch (err) {
-    console.error("Favorite estimate failed", err);
-    const message =
-      err instanceof Anthropic.AuthenticationError
-        ? "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY."
-        : err instanceof Anthropic.RateLimitError
-          ? "Maia is busy (rate limited). Wait a minute and try again."
-          : "Something went wrong talking to Maia. Please try again.";
-    return Response.json({ error: message }, { status: 502 });
+    return Response.json({ error: (err as Error).message }, { status: err instanceof DraftError ? 502 : 500 });
   }
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AutoGrowTextarea from "@/components/auto-grow-textarea";
 import { AddPhotoButton, PhotoPreviews, usePhotos } from "@/components/photo-picker";
-import type { Favorite } from "@/lib/favorites";
+import type { Favorite, FavoriteMeal } from "@/lib/favorites";
 import { addFavorite, deleteFavorite, fetchFavorites } from "@/lib/favorites-data";
 import { MEAL_SLOTS, type Meal } from "@/lib/plan";
 import { authHeaders } from "@/lib/supabase";
@@ -81,6 +81,7 @@ export default function Favorites() {
                       {f.meal.ingredients.length > 0 && (
                         <p className="mt-1 text-xs">{f.meal.ingredients.map((i) => `${i.quantity} ${i.item}`).join(", ")}</p>
                       )}
+                      <RecipeExtras meal={f.meal} />
                     </li>
                   ))}
                 </ul>
@@ -97,7 +98,9 @@ function AddFavorite({ onSaved }: { onSaved: (f: Favorite) => void }) {
   const [slot, setSlot] = useState<Meal["slot"]>("breakfast");
   const [text, setText] = useState("");
   const photos = usePhotos(4);
-  const [draft, setDraft] = useState<{ meal: Meal; note: string } | null>(null);
+  const [mode, setMode] = useState<"describe" | "link">("describe");
+  const [link, setLink] = useState("");
+  const [draft, setDraft] = useState<{ meal: FavoriteMeal; note: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,6 +140,25 @@ function AddFavorite({ onSaved }: { onSaved: (f: Favorite) => void }) {
     }
   }
 
+  async function importLink() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/recipes/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ url: link, slot, note: text }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
+      setDraft(body);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function save() {
     if (!draft) return;
     setBusy(true);
@@ -145,6 +167,7 @@ function AddFavorite({ onSaved }: { onSaved: (f: Favorite) => void }) {
       onSaved(await addFavorite(draft.meal));
       setDraft(null);
       setText("");
+      setLink("");
       setOpen(false);
     } catch (err) {
       setError((err as Error).message);
@@ -164,6 +187,7 @@ function AddFavorite({ onSaved }: { onSaved: (f: Favorite) => void }) {
             <p className="text-xs">{draft.meal.ingredients.map((i) => `${i.quantity} ${i.item}`).join(", ")}</p>
           )}
           <p className="text-xs italic text-muted">{draft.note}</p>
+          <RecipeExtras meal={draft.meal} />
           <div className="flex gap-2 pt-1">
             <button
               type="button"
@@ -174,12 +198,29 @@ function AddFavorite({ onSaved }: { onSaved: (f: Favorite) => void }) {
               Save favorite
             </button>
             <button type="button" onClick={() => setDraft(null)} className="rounded-full border border-line px-4 py-1.5">
-              Edit description
+              Back
             </button>
           </div>
         </div>
       ) : (
         <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-1 rounded-full bg-accent-soft p-1">
+            {(
+              [
+                ["describe", "Describe it"],
+                ["link", "From a link"],
+              ] as const
+            ).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`rounded-full py-1.5 ${mode === m ? "bg-surface font-medium shadow-sm" : ""}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-wrap gap-2">
             {MEAL_SLOTS.map((s) => (
               <button
@@ -195,25 +236,54 @@ function AddFavorite({ onSaved }: { onSaved: (f: Favorite) => void }) {
               </button>
             ))}
           </div>
+          {mode === "link" && (
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="off"
+              autoCorrect="off"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="Paste a recipe link (https://…)"
+              className="w-full rounded-lg border border-line bg-background px-3 py-2 text-base"
+            />
+          )}
           <AutoGrowTextarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={3}
-            placeholder="Describe it, e.g. 'My banana protein pancakes: 1 banana, 2 eggs, 1 scoop vanilla whey, topped with Greek yogurt'"
+            rows={mode === "link" ? 1 : 3}
+            placeholder={
+              mode === "link"
+                ? "Note for Maia (optional), e.g. 'I use half the oil'"
+                : "Describe it, e.g. 'My banana protein pancakes: 1 banana, 2 eggs, 1 scoop vanilla whey, topped with Greek yogurt'"
+            }
             className="w-full rounded-lg border border-line bg-background px-3 py-2 text-base"
           />
-          <PhotoPreviews photos={photos.photos} onRemove={photos.remove} />
+          {mode === "describe" && <PhotoPreviews photos={photos.photos} onRemove={photos.remove} />}
           {photos.error && <p className="text-xs text-warn">⚠️ {photos.error}</p>}
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy || (!text.trim() && photos.photos.length === 0)}
-              onClick={estimate}
-              className="rounded-full bg-accent px-4 py-1.5 text-on-accent disabled:opacity-50"
-            >
-              {busy ? "Maia is working it out…" : "Work out macros"}
-            </button>
-            <AddPhotoButton onPick={photos.add} disabled={busy || photos.full} label="Photo" />
+            {mode === "link" ? (
+              <button
+                type="button"
+                disabled={busy || !link.trim()}
+                onClick={importLink}
+                className="rounded-full bg-accent px-4 py-1.5 text-on-accent disabled:opacity-50"
+              >
+                {busy ? "Importing…" : "Import recipe"}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={busy || (!text.trim() && photos.photos.length === 0)}
+                  onClick={estimate}
+                  className="rounded-full bg-accent px-4 py-1.5 text-on-accent disabled:opacity-50"
+                >
+                  {busy ? "Maia is working it out…" : "Work out macros"}
+                </button>
+                <AddPhotoButton onPick={photos.add} disabled={busy || photos.full} label="Photo" />
+              </>
+            )}
             <button type="button" onClick={() => setOpen(false)} className="rounded-full border border-line px-4 py-1.5">
               Cancel
             </button>
@@ -222,5 +292,35 @@ function AddFavorite({ onSaved }: { onSaved: (f: Favorite) => void }) {
       )}
       {error && <p className="mt-2 text-xs text-warn">⚠️ {error}</p>}
     </section>
+  );
+}
+
+/** Source link and steps, for favorites imported from a recipe page. */
+function RecipeExtras({ meal }: { meal: FavoriteMeal }) {
+  if (!meal.sourceUrl && !meal.steps?.length) return null;
+  let host = "";
+  try {
+    host = meal.sourceUrl ? new URL(meal.sourceUrl).hostname.replace(/^www\./, "") : "";
+  } catch {
+    // Not a valid URL; show no link.
+  }
+  return (
+    <div className="mt-2 text-xs">
+      {host && (
+        <a href={meal.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline">
+          Recipe on {host} ↗
+        </a>
+      )}
+      {meal.steps && meal.steps.length > 0 && (
+        <details className="mt-1">
+          <summary className="cursor-pointer">Steps ({meal.steps.length})</summary>
+          <ol className="mt-1 list-decimal space-y-1 pl-5">
+            {meal.steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </details>
+      )}
+    </div>
   );
 }

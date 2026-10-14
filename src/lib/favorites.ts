@@ -1,9 +1,12 @@
 import type { Meal } from "./plan.ts";
 
+/** A saved meal; imported recipes also keep their source link and steps. */
+export type FavoriteMeal = Meal & { sourceUrl?: string; steps?: string[] };
+
 export interface Favorite {
   id: number;
   slot: Meal["slot"];
-  meal: Meal;
+  meal: FavoriteMeal;
 }
 
 const key = (slot: string, name: string) => `${slot}:${name.trim().toLowerCase()}`;
