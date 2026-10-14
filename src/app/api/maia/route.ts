@@ -7,6 +7,7 @@ import {
   SAVE_WEEK_PLAN_TOOL,
   planningContext,
 } from "@/lib/maia/prompt";
+import { requireUser } from "@/lib/server-auth";
 import { WeekPlanSchema, describeTotals, type WeekPlan } from "@/lib/plan";
 
 // A full week plan can take a minute or two to write.
@@ -48,6 +49,9 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+  const user = await requireUser(request);
+  if (user instanceof Response) return user;
+
   const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return Response.json({ error: "Invalid request." }, { status: 400 });

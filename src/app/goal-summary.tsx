@@ -3,16 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { calculateGoals, type GoalResult } from "@/lib/goals";
-import { loadGoalInput } from "@/lib/storage";
+import { fetchGoalInput } from "@/lib/data";
 
 export default function GoalSummary() {
   const [result, setResult] = useState<GoalResult | null | undefined>(undefined);
 
   useEffect(() => {
-    const input = loadGoalInput();
-    // Device storage is only readable after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setResult(input ? calculateGoals(input) : null);
+    fetchGoalInput()
+      .then((input) => setResult(input ? calculateGoals(input) : null))
+      .catch(() => setResult(null));
   }, []);
 
   if (result === undefined) return <div className="mt-6 h-28" />;

@@ -13,8 +13,31 @@ npm test        # unit tests
 npm run lint
 ```
 
-To use Maia, copy `.env.example` to `.env.local` and add your Anthropic API
-key. The key stays on the server and is never sent to the browser.
+Copy `.env.example` to `.env.local` and fill it in (see **Setting up
+Supabase** below). The Anthropic key stays on the server and is never sent
+to the browser. Variables already set in your shell or hosting environment
+take priority over `.env.local`.
+
+## Setting up Supabase
+
+1. **Create the tables.** In your Supabase project, open the SQL editor and
+   run `supabase/migrations/20261014120000_init.sql`. Alternatively, run
+   `npx supabase link` and then `npx supabase db push`.
+2. **Create your account.** In Authentication → Users, add a user with your
+   email and a password. The app has no sign-up screen.
+3. **Turn off sign-ups** in the Authentication settings ("Allow new users to
+   sign up"). Dashboard labels change over time, so look for the equivalent
+   setting if the name differs.
+4. **Keys.** Put the project URL and the publishable key (or the older
+   "anon" key; either works) in `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+   These are meant to be public: row level security means each signed-in
+   user can only read and write their own rows.
+5. **Lock Maia to you.** Set `ALLOWED_EMAILS` to your email (comma-separate
+   to add more).
+
+For local development without touching the real project, `npx supabase
+start` runs a local copy in Docker (it prints a local URL and keys).
 
 Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 
@@ -33,8 +56,8 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 
 - [x] **Step 1: goal setup** (`/goals`). Weight, height, age, activity, goal
       weight and time frame give daily calories and macros (Mifflin-St Jeor
-      plus activity multiplier, about 7700 kcal per kg). Stored on the device
-      for now.
+      plus activity multiplier, about 7700 kcal per kg). Saved
+      in the database.
 - [x] **Planning chat with Maia** (`/plan`). Pick the week, tap the cycle
       phases in the order they'll happen (e.g. Luteal → Menstrual), choose
       meal prep or cook each meal, then chat. Maia saves the plan with a
@@ -48,7 +71,10 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       Nothing changes until you tap "Update my plan". You can also log
       extra food, and see the day so far and the week's projected total.
       In-app only for now; phone notifications need the hosted version.
-- [ ] Database and sign-in (Supabase) so the data can be shared
+- [x] **Database and sign-in** (Supabase). Email and password sign-in. Goal,
+      week plans (including the Maia chat) and check-ins are stored per
+      user, protected by row level security, so they sync across devices.
+      Maia's API routes check the sign-in token (and `ALLOWED_EMAILS`).
 - [ ] Favorites (breakfast / lunch / dinner / snacks) and recipes
 - [ ] Recipe import from a link (web pages; social posts depend on what
       each site exposes)
@@ -70,8 +96,10 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 - **Refusal fallback**: requests opt in to Anthropic's server-side
   fallback (`fallbacks: "default"`), so if a safety check declines a
   request, the API retries it on another model instead of failing.
-- **No sign-in yet**: anyone who can reach `/api/maia` could use the API
-  key. Don't deploy publicly until sign-in is added.
+- **Data model** (`supabase/migrations/`): `profiles` (goal), `week_plans`
+  (one row per week: phases, mode, Maia chat, plan) and `day_logs` (one
+  row per day: check-ins and extras). Plans and logs are stored as JSON
+  in the same shapes the app uses.
 - **Nutrition data**: food values come from a public food database. The
   candidates still need checking for coverage and licence: the Swedish
   Food Agency database, USDA FoodData Central, and Open Food Facts for

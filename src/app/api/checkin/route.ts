@@ -3,6 +3,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { CHECKIN_SYSTEM_PROMPT, CheckInResponseSchema } from "@/lib/maia/checkin-prompt";
 import { fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
+import { requireUser } from "@/lib/server-auth";
 import { MealSchema, type Meal } from "@/lib/plan";
 
 export const maxDuration = 120;
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return Response.json({ error: MISSING_KEY_ERROR }, { status: 500 });
   }
+  const user = await requireUser(request);
+  if (user instanceof Response) return user;
+
   const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return Response.json({ error: "Invalid request." }, { status: 400 });

@@ -9,7 +9,7 @@ import {
   type ActivityLevel,
   type GoalInput,
 } from "@/lib/goals";
-import { loadGoalInput, saveGoalInput } from "@/lib/storage";
+import { fetchGoalInput, saveGoalInput } from "@/lib/data";
 import { KG_PER_LB, cmToFeetInches, feetInchesToCm, kgToLb, lbToKg, round1 } from "@/lib/units";
 
 // The form is edited in US units; GoalInput (what's saved) is metric.
@@ -75,12 +75,13 @@ function NumberField({
 export default function GoalForm() {
   const [form, setForm] = useState<FormState>(() => toFormState(DEFAULT_GOAL_INPUT));
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = loadGoalInput();
-    // Hydrate from device storage after mount; it isn't available on the server.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (stored) setForm(toFormState(stored));
+    fetchGoalInput()
+      .then((stored) => stored && setForm(toFormState(stored)))
+      .catch((err: Error) => setError(err.message));
   }, []);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -102,8 +103,12 @@ export default function GoalForm() {
       className="mt-6 space-y-6"
       onSubmit={(e) => {
         e.preventDefault();
-        saveGoalInput(input);
-        setSaved(true);
+        setSaving(true);
+        setError(null);
+        saveGoalInput(input)
+          .then(() => setSaved(true))
+          .catch((err: Error) => setError(err.message))
+          .finally(() => setSaving(false));
       }}
     >
       <fieldset className="grid grid-cols-2 gap-3">
@@ -210,10 +215,10 @@ export default function GoalForm() {
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={!valid}
+          disabled={!valid || saving}
           className="rounded-full bg-accent px-5 py-3 font-medium text-on-accent disabled:opacity-50"
         >
-          Save goal
+          {saving ? "Saving…" : "Save goal"}
         </button>
         {saved && (
           <Link href="/" className="text-sm underline">
@@ -221,6 +226,7 @@ export default function GoalForm() {
           </Link>
         )}
       </div>
+      {error && <p className="text-sm text-warn">⚠️ {error}</p>}
     </form>
   );
 }

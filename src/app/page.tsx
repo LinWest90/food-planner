@@ -1,6 +1,7 @@
 import Link from "next/link";
 import CheckInPrompt from "./checkin-prompt";
 import GoalSummary from "./goal-summary";
+import SignOut from "./sign-out";
 
 const comingSoon = [
   "Favorites and recipe import",
@@ -36,10 +37,11 @@ export default function Home() {
           ))}
         </ul>
       </section>
-      <p className="mt-8 text-xs text-muted">
+      <p className="mt-8 flex gap-4 text-xs text-muted">
         <Link href="/goals" className="underline">
           Edit goal
         </Link>
+        <SignOut />
       </p>
     </main>
   );

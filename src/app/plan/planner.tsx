@@ -7,11 +7,13 @@ import { CYCLE_PHASES, PHASE_LABELS, type CyclePhase } from "@/lib/cycle";
 import { calculateGoals, type GoalResult } from "@/lib/goals";
 import { nextMonday, toIsoDate, type WeekPlan } from "@/lib/plan";
 import {
-  loadGoalInput,
-  loadPlanningSession,
-  savePlanningSession,
+  fetchGoalInput,
+  fetchWeek,
+  fetchWeekContaining,
+  saveWeek,
   type PlanningSession,
-} from "@/lib/storage";
+} from "@/lib/data";
+import { authHeaders } from "@/lib/supabase";
 import ChatView from "./chat-view";
 import PlanView from "./plan-view";
 
@@ -39,21 +41,52 @@ export default function Planner() {
   const [tab, setTab] = useState<Tab>("Chat");
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const loaded = useRef(false);
+  // Saves only follow the user's own changes, one at a time, in order.
+  const dirty = useRef(false);
+  const saves = useRef(Promise.resolve());
 
   useEffect(() => {
-    const input = loadGoalInput();
-    const stored = loadPlanningSession();
-    // Device storage is only readable after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setGoal(input ? calculateGoals(input) : null);
-    setSession(stored ?? newSession(nextMonday(new Date())));
-    loaded.current = true;
+    (async () => {
+      const today = new Date();
+      const upcoming = nextMonday(today);
+      const [input, current, next] = await Promise.all([
+        fetchGoalInput(),
+        fetchWeekContaining(toIsoDate(today)),
+        fetchWeek(upcoming),
+      ]);
+      setGoal(input ? calculateGoals(input) : null);
+      // On Sundays, default to planning the coming week.
+      const isSunday = today.getDay() === 0;
+      setSession((!isSunday && current) || next || current || newSession(upcoming));
+    })().catch((err: Error) => {
+      setError(err.message);
+      setGoal(null);
+    });
   }, []);
 
   useEffect(() => {
-    if (loaded.current) savePlanningSession(session);
+    if (!dirty.current) return;
+    const snapshot = session;
+    saves.current = saves.current.then(() =>
+      saveWeek(snapshot).catch((err: Error) => setError(err.message)),
+    );
   }, [session]);
+
+  /** Applies a user change and saves it. */
+  const change = (fn: (s: PlanningSession) => PlanningSession) => {
+    dirty.current = true;
+    setSession(fn);
+  };
+
+  const openWeek = async (weekStart: string) => {
+    dirty.current = false;
+    setError(null);
+    try {
+      setSession((await fetchWeek(weekStart)) ?? newSession(weekStart));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
 
   if (goal === undefined) return null;
   if (goal === null) {
@@ -63,6 +96,7 @@ export default function Planner() {
         <Link href="/goals" className="mt-6 block rounded-xl bg-accent p-4 font-medium text-on-accent">
           Set your calorie and macro goal first →
         </Link>
+        {error && <p className="mt-4 text-sm text-warn">⚠️ {error}</p>}
       </div>
     );
   }
@@ -76,7 +110,7 @@ export default function Planner() {
   const busy = streamingText !== null;
 
   const togglePhase = (phase: CyclePhase) =>
-    setSession((s) => ({
+    change((s) => ({
       ...s,
       phases: s.phases.includes(phase) ? s.phases.filter((p) => p !== phase) : [...s.phases, phase],
     }));
@@ -88,7 +122,7 @@ export default function Planner() {
     try {
       const res = await fetch("/api/maia", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           history: session.history,
           message,
@@ -127,7 +161,7 @@ export default function Planner() {
             throw new Error(event.message);
           } else if (event.type === "done") {
             const newMessages = event.newMessages;
-            setSession((s) => ({
+            change((s) => ({
               ...s,
               history: [...s.history, ...newMessages],
               plan: plan ?? s.plan,
@@ -144,7 +178,7 @@ export default function Planner() {
 
   const startOver = () => {
     if (confirm("Start a new plan? This clears the chat and the current plan.")) {
-      setSession({ ...newSession(session.weekStart), phases: session.phases, mode: session.mode });
+      change((s) => ({ ...newSession(s.weekStart), phases: s.phases, mode: s.mode }));
       setTab("Chat");
     }
   };
@@ -164,7 +198,8 @@ export default function Planner() {
           <input
             type="date"
             value={session.weekStart}
-            onChange={(e) => e.target.value && setSession((s) => ({ ...s, weekStart: e.target.value }))}
+            onChange={(e) => e.target.value && openWeek(e.target.value)}
+            disabled={busy}
             className="rounded-lg border border-line bg-background px-2 py-1"
           />
         </label>
@@ -204,7 +239,7 @@ export default function Planner() {
                 key={mode}
                 type="button"
                 aria-pressed={session.mode === mode}
-                onClick={() => setSession((s) => ({ ...s, mode }))}
+                onClick={() => change((s) => ({ ...s, mode }))}
                 className={chip(session.mode === mode)}
               >
                 {label}

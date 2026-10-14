@@ -17,13 +17,14 @@ import { PHASE_LABELS } from "@/lib/cycle";
 import { calculateGoals } from "@/lib/goals";
 import { toIsoDate, type Day, type Meal, type Totals } from "@/lib/plan";
 import {
-  loadFoodLog,
-  loadGoalInput,
-  loadPlanningSession,
-  saveFoodLog,
-  savePlanningSession,
+  fetchDayLogs,
+  fetchGoalInput,
+  fetchWeekContaining,
+  saveDayLog,
+  saveWeek,
   type PlanningSession,
-} from "@/lib/storage";
+} from "@/lib/data";
+import { authHeaders } from "@/lib/supabase";
 
 const DATE_LABEL = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" });
 
@@ -56,21 +57,32 @@ export default function Today() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /** Loads the plan covering `forDate` and that week's check-ins. */
+  async function loadDate(forDate: string) {
+    const session = await fetchWeekContaining(forDate);
+    const from = session?.weekStart ?? forDate;
+    const log = await fetchDayLogs(from, session ? shiftDate(from, 6) : forDate);
+    setState((prev) => prev && { ...prev, session, log: { ...prev.log, ...log } });
+  }
+
   useEffect(() => {
-    const goal = loadGoalInput();
     const today = toIsoDate(new Date());
-    // Device storage and the current date are only available after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState({
-      target: goal ? calculateGoals(goal) : null,
-      session: loadPlanningSession(),
-      log: loadFoodLog(),
-      today,
-    });
-    setDate(today);
+    fetchGoalInput()
+      .then(async (goal) => {
+        setState({ target: goal ? calculateGoals(goal) : null, session: null, log: {}, today });
+        setDate(today);
+        await loadDate(today);
+      })
+      .catch((err: Error) => setError(err.message));
   }, []);
 
-  if (!state) return null;
+  const goToDate = (next: string) => {
+    setDate(next);
+    setSuggestion(null);
+    loadDate(next).catch((err: Error) => setError(err.message));
+  };
+
+  if (!state) return error ? <p className="text-sm text-warn">⚠️ {error}</p> : null;
   const { target, session, log, today } = state;
 
   if (!target) {
@@ -88,9 +100,8 @@ export default function Today() {
   const due = new Set(dueMeals(day, dayLog, new Date()).map((d) => d.index));
 
   const updateLog = (next: DayLog) => {
-    const nextLog = { ...log, [date]: next };
-    saveFoodLog(nextLog);
-    setState({ ...state, log: nextLog });
+    setState({ ...state, log: { ...log, [date]: next } });
+    saveDayLog(date, next).catch((err: Error) => setError(err.message));
   };
 
   const markAsPlanned = (index: number, meal: Meal) =>
@@ -124,7 +135,7 @@ export default function Today() {
 
       const res = await fetch("/api/checkin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           date,
           description,
@@ -170,9 +181,9 @@ export default function Today() {
       }),
     }));
     const nextSession = { ...session, plan: { ...session.plan, days } };
-    savePlanningSession(nextSession);
     setState({ ...state, session: nextSession });
     setSuggestion({ ...suggestion, applied: true });
+    saveWeek(nextSession).catch((err: Error) => setError(err.message));
   };
 
   const week = plan ? weekProjection(plan, log) : null;
@@ -187,14 +198,14 @@ export default function Today() {
         </Link>
       </div>
       <div className="mt-2 flex items-center justify-between text-sm">
-        <button type="button" onClick={() => setDate(shiftDate(date, -1))} className="px-2 py-1" aria-label="Previous day">
+        <button type="button" onClick={() => goToDate(shiftDate(date, -1))} className="px-2 py-1" aria-label="Previous day">
           ‹ Prev
         </button>
         <span className="text-muted">
           {DATE_LABEL.format(parseDate(date))}
           {day.phase && ` · ${PHASE_LABELS[day.phase]}`}
         </span>
-        <button type="button" onClick={() => setDate(shiftDate(date, 1))} className="px-2 py-1" aria-label="Next day">
+        <button type="button" onClick={() => goToDate(shiftDate(date, 1))} className="px-2 py-1" aria-label="Next day">
           Next ›
         </button>
       </div>
@@ -292,7 +303,7 @@ export default function Today() {
                 <span>
                   {x.name} <span className="text-xs text-muted">{macroLine(x)}</span>
                 </span>
-                <button type="button" onClick={() => removeExtra(i)} className="text-xs text-muted underline">
+                <button type="button" onClick={() => removeExtra(i)} disabled={busy} className="text-xs text-muted underline">
                   Remove
                 </button>
               </li>
@@ -347,7 +358,7 @@ function MealCheckIn({
               <span className="block text-xs text-muted tabular-nums">{macroLine(checkIn.ate)}</span>
             </span>
           )}
-          <button type="button" onClick={onUndo} className="shrink-0 text-xs text-muted underline">
+          <button type="button" onClick={onUndo} disabled={busy} className="shrink-0 text-xs text-muted underline">
             Change
           </button>
         </div>
@@ -367,13 +378,19 @@ function MealCheckIn({
         <div className="mt-2">
           <p className="text-sm">{due ? "Did this meal happen as planned?" : "Already eaten?"}</p>
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={onYes} className="rounded-full bg-accent px-4 py-1.5 text-sm text-on-accent">
+            <button
+              type="button"
+              onClick={onYes}
+              disabled={busy}
+              className="rounded-full bg-accent px-4 py-1.5 text-sm text-on-accent disabled:opacity-50"
+            >
               Yes ✅
             </button>
             <button
               type="button"
               onClick={() => setDescribing(true)}
-              className="rounded-full border border-line px-4 py-1.5 text-sm"
+              disabled={busy}
+              className="rounded-full border border-line px-4 py-1.5 text-sm disabled:opacity-50"
             >
               No ❌
             </button>
