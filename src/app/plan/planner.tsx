@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MaiaEvent } from "@/app/api/maia/route";
 import { CYCLE_PHASES, PHASE_LABELS, type CyclePhase } from "@/lib/cycle";
 import { calculateGoals, type GoalResult } from "@/lib/goals";
-import { nextMonday, toIsoDate, type WeekPlan } from "@/lib/plan";
+import { nextMonday, toIsoDate, togglePrepTask, type WeekPlan } from "@/lib/plan";
 import {
   fetchGoalInput,
   fetchWeek,
@@ -272,7 +272,12 @@ export default function Planner() {
             onSend={send}
           />
         ) : (
-          <PlanView plan={session.plan} target={target} view={tab} />
+          <PlanView
+            plan={session.plan}
+            target={target}
+            view={tab}
+            onTogglePrep={(i) => change((s) => (s.plan ? { ...s, plan: togglePrepTask(s.plan, i) } : s))}
+          />
         )}
       </div>
 

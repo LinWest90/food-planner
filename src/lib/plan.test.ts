@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { describeTotals, nextMonday, sumMeals, WeekPlanSchema } from "./plan.ts";
+import { describeTotals, nextMonday, sumMeals, togglePrepTask, WeekPlanSchema } from "./plan.ts";
 
 const meal = (calories: number, proteinG: number, carbsG: number, fatG: number) => ({
   slot: "lunch" as const,
@@ -41,4 +41,19 @@ test("next Monday", () => {
   assert.equal(nextMonday(new Date(2026, 9, 14)), "2026-10-19"); // Wednesday
   assert.equal(nextMonday(new Date(2026, 9, 18)), "2026-10-19"); // Sunday
   assert.equal(nextMonday(new Date(2026, 9, 19)), "2026-10-19"); // Monday itself
+});
+
+test("ticks and unticks one prep task", () => {
+  const plan = WeekPlanSchema.parse({
+    days: [{ date: "2026-10-19", meals: [] }],
+    shoppingList: [],
+    prepTasks: [
+      { task: "Cook rice", when: "Sunday" },
+      { task: "Bake chicken", when: "Sunday" },
+    ],
+  });
+  const ticked = togglePrepTask(plan, 1);
+  assert.deepEqual(ticked.prepTasks.map((t) => !!t.done), [false, true]);
+  assert.equal(togglePrepTask(ticked, 1).prepTasks[1].done, false);
+  assert.equal(plan.prepTasks[1].done, undefined); // original untouched
 });

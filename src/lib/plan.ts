@@ -32,7 +32,10 @@ export const WeekPlanSchema = z.object({
   shoppingList: z.array(
     z.object({ item: z.string(), quantity: z.string(), category: z.string() }),
   ),
-  prepTasks: z.array(z.object({ task: z.string(), when: z.string() })),
+  prepTasks: z.array(
+    // `done` is ticked off in the app; Maia doesn't set it.
+    z.object({ task: z.string(), when: z.string(), done: z.boolean().optional() }),
+  ),
   notes: z.string().optional(),
 });
 
@@ -94,4 +97,12 @@ export function toIsoDate(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** The plan with one prep task ticked or unticked. */
+export function togglePrepTask(plan: WeekPlan, index: number): WeekPlan {
+  return {
+    ...plan,
+    prepTasks: plan.prepTasks.map((t, i) => (i === index ? { ...t, done: !t.done } : t)),
+  };
 }

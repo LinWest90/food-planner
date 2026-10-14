@@ -26,10 +26,12 @@ export default function PlanView({
   plan,
   target,
   view,
+  onTogglePrep,
 }: {
   plan: WeekPlan | null;
   target: Totals;
   view: "Plan" | "Shopping" | "Prep";
+  onTogglePrep: (index: number) => void;
 }) {
   if (!plan) {
     return <p className="text-sm text-muted">No plan yet. Chat with Maia to make one.</p>;
@@ -61,29 +63,51 @@ export default function PlanView({
 
   if (view === "Prep") {
     // One card per session ("Wednesday evening prep"), steps numbered in order.
-    const sessions: { when: string; tasks: string[] }[] = [];
-    for (const t of plan.prepTasks) {
+    const sessions: { when: string; tasks: { index: number; task: string; done: boolean }[] }[] = [];
+    plan.prepTasks.forEach((t, index) => {
+      const step = { index, task: t.task, done: !!t.done };
       const last = sessions.at(-1);
-      if (last && last.when === t.when) last.tasks.push(t.task);
-      else sessions.push({ when: t.when, tasks: [t.task] });
-    }
+      if (last && last.when === t.when) last.tasks.push(step);
+      else sessions.push({ when: t.when, tasks: [step] });
+    });
     return (
       <div className="space-y-4">
-        {sessions.map((session, i) => (
-          <section key={i} className="rounded-xl border border-line bg-surface p-4">
-            <h2 className="font-semibold">{session.when}</h2>
-            <ol className="mt-3 space-y-3">
-              {session.tasks.map((task, j) => (
-                <li key={j} className="flex gap-3 text-sm leading-relaxed">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold tabular-nums">
-                    {j + 1}
-                  </span>
-                  <span className="pt-0.5">{task}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
-        ))}
+        {sessions.map((session, i) => {
+          const doneCount = session.tasks.filter((t) => t.done).length;
+          return (
+            <section key={i} className="rounded-xl border border-line bg-surface p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="font-semibold">{session.when}</h2>
+                <span className="text-xs text-muted tabular-nums">
+                  {doneCount === session.tasks.length ? "All done ✓" : `${doneCount} of ${session.tasks.length} done`}
+                </span>
+              </div>
+              <ol className="mt-3 space-y-1">
+                {session.tasks.map((t, j) => (
+                  <li key={t.index}>
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={t.done}
+                      onClick={() => onTogglePrep(t.index)}
+                      className="flex w-full gap-3 rounded-lg py-1.5 text-left text-sm leading-relaxed"
+                    >
+                      <span
+                        aria-hidden
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular-nums ${
+                          t.done ? "border-accent bg-accent text-on-accent" : "border-line bg-accent-soft"
+                        }`}
+                      >
+                        {t.done ? "✓" : j + 1}
+                      </span>
+                      <span className={`pt-0.5 ${t.done ? "text-muted line-through" : ""}`}>{t.task}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          );
+        })}
       </div>
     );
   }
