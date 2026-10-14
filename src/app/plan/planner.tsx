@@ -24,6 +24,16 @@ function newSession(weekStart: string): PlanningSession {
   return { weekStart, phases: [], mode: "prep", history: [], plan: null };
 }
 
+/** Uploads one photo for Maia and returns its file id. */
+async function uploadPhoto(photo: Blob, auth: Record<string, string>): Promise<string> {
+  const form = new FormData();
+  form.append("file", photo, "photo.jpg");
+  const res = await fetch("/api/maia/upload", { method: "POST", headers: auth, body: form });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body?.fileId) throw new Error(body?.error ?? `Photo upload failed (${res.status})`);
+  return body.fileId;
+}
+
 function addDays(isoDate: string, days: number): string {
   const [y, m, d] = isoDate.split("-").map(Number);
   return toIsoDate(new Date(y, m - 1, d + days));
@@ -115,17 +125,21 @@ export default function Planner() {
       phases: s.phases.includes(phase) ? s.phases.filter((p) => p !== phase) : [...s.phases, phase],
     }));
 
-  async function send(message: string) {
+  /** Sends a message (and photos) to Maia. Returns false if it failed. */
+  async function send(message: string, photos: Blob[]): Promise<boolean> {
     setError(null);
     setStreamingText("");
     let text = "";
     try {
+      const auth = await authHeaders();
+      const imageFileIds = await Promise.all(photos.map((photo) => uploadPhoto(photo, auth)));
       const res = await fetch("/api/maia", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        headers: { "Content-Type": "application/json", ...auth },
         body: JSON.stringify({
           history: session.history,
           message,
+          imageFileIds,
           context: {
             target,
             weekStart: session.weekStart,
@@ -143,6 +157,7 @@ export default function Planner() {
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
       let buffer = "";
       let plan: WeekPlan | null = null;
+      let finished = false;
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -160,6 +175,7 @@ export default function Planner() {
           } else if (event.type === "error") {
             throw new Error(event.message);
           } else if (event.type === "done") {
+            finished = true;
             const newMessages = event.newMessages;
             change((s) => ({
               ...s,
@@ -169,8 +185,11 @@ export default function Planner() {
           }
         }
       }
+      if (!finished) throw new Error("The connection to Maia dropped. Please try again.");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setStreamingText(null);
     }

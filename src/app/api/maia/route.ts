@@ -20,7 +20,9 @@ const RequestSchema = z.object({
   // Earlier turns exactly as returned by this route. Sent back unchanged
   // (append-only), which the API requires for thinking blocks.
   history: z.array(z.custom<Anthropic.Beta.BetaMessageParam>()),
-  message: z.string().min(1).max(4000),
+  message: z.string().max(4000),
+  // Photos uploaded through /api/maia/upload, by Files API id.
+  imageFileIds: z.array(z.string().regex(/^file_[A-Za-z0-9_-]+$/)).max(4).default([]),
   context: z.object({
     target: z.object({
       calories: z.number(),
@@ -56,7 +58,10 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  const { history, message, context } = parsed.data;
+  const { history, message, context, imageFileIds } = parsed.data;
+  if (!message.trim() && imageFileIds.length === 0) {
+    return Response.json({ error: "Write a message or add a photo." }, { status: 400 });
+  }
 
   const client = new Anthropic();
   const encoder = new TextEncoder();
@@ -71,7 +76,10 @@ export async function POST(request: Request) {
           role: "user",
           content: [
             { type: "text", text: planningContext(context) },
-            { type: "text", text: message },
+            ...imageFileIds.map(
+              (file_id): Anthropic.Beta.BetaImageBlockParam => ({ type: "image", source: { type: "file", file_id } }),
+            ),
+            { type: "text", text: message.trim() || "Here's a photo." },
           ],
         },
       ];

@@ -95,7 +95,11 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 - [ ] Favorites (breakfast / lunch / dinner / snacks) and recipes
 - [ ] Recipe import from a link (web pages; social posts depend on what
       each site exposes)
-- [ ] Nutrition label photo → macros (Claude vision)
+- [x] **Photos for Maia** in the planning chat (📷, up to 4 per message):
+      nutrition labels, packaging, recipes or meals. Photos are shrunk on
+      the phone, stored with Anthropic's Files API, and the chat keeps
+      only their file ids. Maia reads label values, says what she read,
+      and asks again if a label is unreadable.
 - [ ] Coach share link and weekly report
 
 ## Planned architecture
