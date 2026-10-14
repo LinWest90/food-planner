@@ -39,7 +39,24 @@ take priority over `.env.local`.
 For local development without touching the real project, `npx supabase
 start` runs a local copy in Docker (it prints a local URL and keys).
 
-Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
+## Deploying to Vercel
+
+1. Sign in at vercel.com with GitHub, then **Add New → Project** and import
+   this repository. Vercel detects Next.js automatically.
+2. Before the first deploy, add these **Environment Variables**:
+   `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `..._PUBLISHABLE_KEY`) and
+   `ALLOWED_EMAILS`. The `NEXT_PUBLIC_` values are built into the app, so
+   redeploy after changing them.
+3. Deploy. Every push to the production branch (the repository's default
+   branch) redeploys automatically.
+4. On your iPhone, open the site in Safari → Share → **Add to Home Screen**.
+   It then opens full screen with its own icon.
+
+Maia's planning route can run up to 300 seconds (`maxDuration`), which
+is within Vercel's Hobby plan limit when Fluid compute is on (the default).
+
+ (App Router), React 19, TypeScript and Tailwind CSS 4.
 
 ## Decisions so far
 
@@ -84,7 +101,8 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 ## Planned architecture
 
 - **Next.js on Vercel**: the UI plus server routes that call Claude, so
-  the API key never reaches the browser.
+  the API key never reaches the browser. Installable on the home screen
+  (web manifest + icons in `src/app/`).
 - **Supabase**: Postgres database, sign-in, and photo storage for labels.
 - **Claude tool use**: Maia runs on Claude Opus 5.5 (`src/app/api/maia/route.ts`)
   and saves plans through a `save_week_plan` tool. The app adds up the

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AuthGate from "./auth-gate";
 import "./globals.css";
@@ -16,6 +16,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: { default: "Food Planner", template: "%s · Food Planner" },
   description: "Weekly meal planning with Maia, your AI food assistant.",
+  appleWebApp: { title: "Food Planner", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbfaf7" },
+    { media: "(prefers-color-scheme: dark)", color: "#141412" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
