@@ -43,7 +43,7 @@ async function userId(): Promise<string> {
 function check<T>({ data, error }: { data: T; error: { message: string } | null }): T {
   if (error?.message.includes("schema cache")) {
     throw new Error(
-      "The database tables haven't been set up yet. Run supabase/migrations/20261014120000_init.sql in the Supabase SQL editor (see README).",
+      "Some database tables haven't been set up yet. Run the SQL files in supabase/migrations/ in the Supabase SQL editor (see README).",
     );
   }
   if (error) throw new Error(`Couldn't reach the database: ${error.message}`);
