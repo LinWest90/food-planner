@@ -7,7 +7,12 @@ export interface LoggedFood extends Totals {
 
 export type CheckIn =
   | { mealName: string; status: "as-planned" }
+  /** The planned meal with small changes: counts as "as planned", with adjusted macros. */
+  | { mealName: string; status: "tweaked"; ate: LoggedFood; note: string }
   | { mealName: string; status: "changed"; ate: LoggedFood };
+
+/** Eaten as planned, including with small tweaks. */
+export const countsAsPlanned = (c: CheckIn | undefined) => c?.status === "as-planned" || c?.status === "tweaked";
 
 export interface DayLog {
   /** Keyed by the meal's index in the day's plan. */

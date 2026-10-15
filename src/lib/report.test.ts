@@ -59,3 +59,19 @@ test("description includes changes and phases", () => {
   assert.match(text, /2026-10-19 \(luteal\): 1750 \/ 1400 kcal/);
   assert.match(text, /Pizza instead of Salmon/);
 });
+
+test("planned meals eaten with small tweaks count as planned, with their own macros", () => {
+  const tweaked: FoodLog = {
+    "2026-10-19": {
+      checkIns: {
+        0: { mealName: "Oats", status: "tweaked", ate: { name: "Oats (no honey)", calories: 450, proteinG: 30, carbsG: 0, fatG: 0 }, note: "no honey" },
+        1: { mealName: "Salmon", status: "as-planned" },
+      },
+      extras: [],
+    },
+  };
+  const s = weekStats(plan, tweaked, "2026-10-19", target);
+  assert.equal(s.mealsAsPlanned, 2);
+  assert.equal(s.days[0].eaten.calories, 450 + 900);
+  assert.deepEqual(s.days[0].changes, ["Breakfast: Oats, with tweaks (no honey)"]);
+});

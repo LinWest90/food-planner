@@ -124,8 +124,10 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
 - [x] Plan, shopping list and prep list tabs
 - [x] **Meal check-ins** (`/today`). After each meal's time (breakfast 9:00,
       lunch 13:00, snack 16:00, dinner 19:30) the home screen asks "Did lunch
-      happen as planned?". Answer ✅ or ❌. For ❌, describe what you ate
-      instead and Maia estimates it and suggests changes to later meals.
+      happen as planned?". Answer ✅, ✨ (as planned with small tweaks, e.g.
+      no dressing: Maia adjusts that meal's macros and it still counts as
+      planned in reports) or ❌. For ❌, describe what you ate instead and
+      Maia estimates it and suggests changes to later meals.
       Nothing changes until you tap "Update my plan". You can also log
       extra food, and see the day so far and the week's projected total.
       Phone notifications remind you too (see **Meal reminders** above).
@@ -137,7 +139,9 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       snacks. Save a planned meal with ☆/★ on the Plan tab, or describe one
       (optionally with a photo) and Maia works out ingredients and macros
       for you to review. Maia gets the list each time you plan and builds
-      the week around them, scaling portions to your targets.
+      the week around them, scaling portions to your targets. In the
+      planning chat she can also add, update or remove favorites when asked
+      (`save_favorite` / `remove_favorite` tools, run as the signed-in user).
 - [x] **Recipe import from a link** (Favorites → From a link). The server
       fetches the page (public http/https addresses only, re-checked on each
       redirect, 12 s and 3 MB limits), reads the schema.org Recipe that most

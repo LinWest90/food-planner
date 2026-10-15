@@ -4,9 +4,17 @@ import { CYCLE_PHASES } from "@/lib/cycle";
 import { describeMaiaError, fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
 import {
   MAIA_SYSTEM_PROMPT,
+  REMOVE_FAVORITE_TOOL,
+  SAVE_FAVORITE_TOOL,
   SAVE_WEEK_PLAN_TOOL,
   planningContext,
 } from "@/lib/maia/prompt";
+import {
+  RemoveFavoriteInput,
+  removeFavorite,
+  SaveFavoriteInput,
+  saveFavorite,
+} from "@/lib/server/favorite-tools";
 import { describeFavorites, type Favorite } from "@/lib/favorites";
 import { bearerToken, requireUser, userClient } from "@/lib/server-auth";
 import { WeekPlanSchema, describeTotals, type WeekPlan } from "@/lib/plan";
@@ -14,8 +22,8 @@ import { WeekPlanSchema, describeTotals, type WeekPlan } from "@/lib/plan";
 // A full week plan can take a minute or two to write.
 export const maxDuration = 300;
 
-// Max model calls per user message: reply, save, adjust and save again, summary.
-const MAX_STEPS = 5;
+// Max model calls per user message: reply, save favorites/plan, adjust and save again, summary.
+const MAX_STEPS = 8;
 
 const RequestSchema = z.object({
   // Earlier turns exactly as returned by this route. Sent back unchanged
@@ -43,6 +51,8 @@ const RequestSchema = z.object({
 export type MaiaEvent =
   | { type: "text"; text: string }
   | { type: "plan"; plan: WeekPlan }
+  /** Maia changed a favorite; the app should reload them. */
+  | { type: "favorites" }
   | { type: "done"; newMessages: Anthropic.Beta.BetaMessageParam[] }
   | { type: "error"; message: string };
 
@@ -55,6 +65,7 @@ export async function POST(request: Request) {
   }
   const user = await requireUser(request);
   if (user instanceof Response) return user;
+  const userId = user.id;
 
   const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -62,7 +73,8 @@ export async function POST(request: Request) {
   }
   const { history, message, context, imageFileIds } = parsed.data;
   // Her saved favorites, read as her (row level security applies).
-  const favorites = await userClient(bearerToken(request)!)
+  const db = userClient(bearerToken(request)!);
+  const favorites = await db
     .from("favorites")
     .select("id, slot, meal")
     .order("created_at")
@@ -95,6 +107,46 @@ export async function POST(request: Request) {
         },
       ];
 
+      const toolError = (tool: Anthropic.Beta.BetaToolUseBlock, message: string): Anthropic.Beta.BetaToolResultBlockParam => ({
+        type: "tool_result",
+        tool_use_id: tool.id,
+        is_error: true,
+        content: message,
+      });
+
+      /** Runs one of Maia's tools and returns its result for her. */
+      async function runTool(tool: Anthropic.Beta.BetaToolUseBlock): Promise<Anthropic.Beta.BetaToolResultBlockParam> {
+        if (tool.name === "save_week_plan") {
+          const plan = WeekPlanSchema.safeParse(tool.input);
+          if (!plan.success) return toolError(tool, JSON.stringify({ INVALID_INPUT: z.prettifyError(plan.error) }));
+          send({ type: "plan", plan: plan.data });
+          return {
+            type: "tool_result",
+            tool_use_id: tool.id,
+            content: `Saved. Daily totals computed by the app (difference from target in brackets):\n${describeTotals(plan.data, context.target)}`,
+          };
+        }
+        if (tool.name === "save_favorite" || tool.name === "remove_favorite") {
+          try {
+            let outcome: string;
+            if (tool.name === "save_favorite") {
+              const input = SaveFavoriteInput.safeParse(tool.input);
+              if (!input.success) return toolError(tool, JSON.stringify({ INVALID_INPUT: z.prettifyError(input.error) }));
+              outcome = await saveFavorite(db, userId, input.data);
+            } else {
+              const input = RemoveFavoriteInput.safeParse(tool.input);
+              if (!input.success) return toolError(tool, JSON.stringify({ INVALID_INPUT: z.prettifyError(input.error) }));
+              outcome = await removeFavorite(db, input.data);
+            }
+            send({ type: "favorites" });
+            return { type: "tool_result", tool_use_id: tool.id, content: outcome };
+          } catch (err) {
+            return toolError(tool, `Failed: ${(err as Error).message}`);
+          }
+        }
+        return toolError(tool, `Unknown tool ${tool.name}`);
+      }
+
       try {
         for (let step = 0; step < MAX_STEPS; step++) {
           const fallback = fallbackParams();
@@ -111,7 +163,7 @@ export async function POST(request: Request) {
             output_config: { effort: "medium" },
             cache_control: { type: "ephemeral" },
             system: MAIA_SYSTEM_PROMPT,
-            tools: [SAVE_WEEK_PLAN_TOOL],
+            tools: [SAVE_WEEK_PLAN_TOOL, SAVE_FAVORITE_TOOL, REMOVE_FAVORITE_TOOL],
             messages: [...history, ...newMessages],
           });
           response.on("text", (text) => send({ type: "text", text }));
@@ -150,25 +202,10 @@ export async function POST(request: Request) {
           }
 
           newMessages.push({ role: "assistant", content: final.content });
-          const results: Anthropic.Beta.BetaToolResultBlockParam[] = toolUses.map((tool) => {
-            const plan = tool.name === "save_week_plan" ? WeekPlanSchema.safeParse(tool.input) : null;
-            if (!plan?.success) {
-              return {
-                type: "tool_result",
-                tool_use_id: tool.id,
-                is_error: true,
-                content: JSON.stringify({
-                  INVALID_INPUT: plan ? z.prettifyError(plan.error) : `Unknown tool ${tool.name}`,
-                }),
-              };
-            }
-            send({ type: "plan", plan: plan.data });
-            return {
-              type: "tool_result",
-              tool_use_id: tool.id,
-              content: `Saved. Daily totals computed by the app (difference from target in brackets):\n${describeTotals(plan.data, context.target)}`,
-            };
-          });
+          const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
+          for (const tool of toolUses) {
+            results.push(await runTool(tool));
+          }
           newMessages.push({ role: "user", content: results });
         }
         send({ type: "error", message: "Maia took too many steps. Please try again." });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AutoGrowTextarea from "@/components/auto-grow-textarea";
 import { AddPhotoButton, PhotoPreviews, usePhotos } from "@/components/photo-picker";
 import RichText from "@/components/rich-text";
@@ -60,6 +60,12 @@ export default function Today() {
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Saves go out one at a time, in order. Each save writes the whole day, so
+  // letting them overlap could let an older one land last and undo a newer one.
+  const saves = useRef(Promise.resolve());
+  const queueSave = (save: () => Promise<void>) => {
+    saves.current = saves.current.then(() => save().catch((err: Error) => setError(err.message)));
+  };
 
   /** Loads the plan covering `forDate` and that week's check-ins. */
   async function loadDate(forDate: string) {
@@ -106,7 +112,7 @@ export default function Today() {
 
   const updateLog = (next: DayLog) => {
     setState({ ...state, log: { ...log, [date]: next } });
-    saveDayLog(date, next).catch((err: Error) => setError(err.message));
+    queueSave(() => saveDayLog(date, next));
   };
 
   const markAsPlanned = (index: number, meal: Meal) =>
@@ -125,6 +131,7 @@ export default function Today() {
     description: string,
     photos: Blob[],
     replaces: { index: number; meal: Meal } | null,
+    kind: "instead" | "tweak" = "instead",
   ) {
     setBusy(true);
     setError(null);
@@ -150,6 +157,7 @@ export default function Today() {
         body: JSON.stringify({
           date,
           description,
+          kind,
           imageFileIds,
           replaces: replaces?.meal ?? null,
           target,
@@ -168,7 +176,10 @@ export default function Today() {
               ...dayLog,
               checkIns: {
                 ...dayLog.checkIns,
-                [replaces.index]: { mealName: replaces.meal.name, status: "changed", ate },
+                [replaces.index]:
+                  kind === "tweak"
+                    ? { mealName: replaces.meal.name, status: "tweaked", ate, note: description || "see photo" }
+                    : { mealName: replaces.meal.name, status: "changed", ate },
               },
             }
           : { ...dayLog, extras: [...dayLog.extras, ate] },
@@ -195,7 +206,7 @@ export default function Today() {
     const nextSession = { ...session, plan: { ...session.plan, days } };
     setState({ ...state, session: nextSession });
     setSuggestion({ ...suggestion, applied: true });
-    saveWeek(nextSession).catch((err: Error) => setError(err.message));
+    queueSave(() => saveWeek(nextSession));
   };
 
   const week = plan ? weekProjection(plan, log) : null;
@@ -302,6 +313,7 @@ export default function Today() {
               busy={busy}
               onYes={() => markAsPlanned(index, meal)}
               onNo={(text, photos) => logWithMaia(text, photos, { index, meal })}
+              onTweak={(text, photos) => logWithMaia(text, photos, { index, meal }, "tweak")}
               onUndo={() => clearCheckIn(index)}
             />
           ))}
@@ -344,6 +356,7 @@ function MealCheckIn({
   busy,
   onYes,
   onNo,
+  onTweak,
   onUndo,
 }: {
   meal: Meal;
@@ -352,9 +365,10 @@ function MealCheckIn({
   busy: boolean;
   onYes: () => void;
   onNo: (description: string, photos: Blob[]) => Promise<boolean>;
+  onTweak: (description: string, photos: Blob[]) => Promise<boolean>;
   onUndo: () => void;
 }) {
-  const [describing, setDescribing] = useState(false);
+  const [describing, setDescribing] = useState<"instead" | "tweak" | null>(null);
 
   return (
     <li className={`rounded-xl border bg-surface p-3 ${due ? "border-accent" : "border-line"}`}>
@@ -366,6 +380,11 @@ function MealCheckIn({
         <div className="mt-2 flex items-start justify-between gap-2 text-sm">
           {checkIn.status === "as-planned" ? (
             <span>✅ Ate as planned</span>
+          ) : checkIn.status === "tweaked" ? (
+            <span>
+              ✨ As planned, with tweaks: {checkIn.note}
+              <span className="block text-xs text-muted tabular-nums">{macroLine(checkIn.ate)}</span>
+            </span>
           ) : (
             <span>
               ❌ Ate instead: {checkIn.ate.name}
@@ -378,20 +397,24 @@ function MealCheckIn({
         </div>
       ) : describing ? (
         <DescribeFood
-          placeholder="What did you eat instead?"
+          placeholder={
+            describing === "tweak"
+              ? "What did you change? e.g. no dressing, extra chicken"
+              : "What did you eat instead?"
+          }
           submitLabel="Tell Maia"
           busy={busy}
           onSubmit={async (text, photos) => {
-            const ok = await onNo(text, photos);
-            if (ok) setDescribing(false);
+            const ok = await (describing === "tweak" ? onTweak : onNo)(text, photos);
+            if (ok) setDescribing(null);
             return ok;
           }}
-          onCancel={() => setDescribing(false)}
+          onCancel={() => setDescribing(null)}
         />
       ) : (
         <div className="mt-2">
           <p className="text-sm">{due ? "Did this meal happen as planned?" : "Already eaten?"}</p>
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={onYes}
@@ -402,7 +425,15 @@ function MealCheckIn({
             </button>
             <button
               type="button"
-              onClick={() => setDescribing(true)}
+              onClick={() => setDescribing("tweak")}
+              disabled={busy}
+              className="rounded-full border border-accent px-4 py-1.5 text-sm disabled:opacity-50"
+            >
+              Yes, with tweaks ✨
+            </button>
+            <button
+              type="button"
+              onClick={() => setDescribing("instead")}
               disabled={busy}
               className="rounded-full border border-line px-4 py-1.5 text-sm disabled:opacity-50"
             >

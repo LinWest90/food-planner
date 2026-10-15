@@ -18,6 +18,8 @@ const TotalsSchema = z.object({
 const RequestSchema = z.object({
   date: z.string(),
   description: z.string().max(2000),
+  /** "instead": she ate something else; "tweak": the planned meal with small changes. */
+  kind: z.enum(["instead", "tweak"]).default("instead"),
   // Photos uploaded through /api/maia/upload, by Files API id.
   imageFileIds: z.array(z.string().regex(/^file_[A-Za-z0-9_-]+$/)).max(4).default([]),
   /** The planned meal this replaces; absent for extra food. */
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  const { date, description, imageFileIds, replaces, target, eatenToday, remaining } = parsed.data;
+  const { date, description, kind, imageFileIds, replaces, target, eatenToday, remaining } = parsed.data;
   if (!description.trim() && imageFileIds.length === 0) {
     return Response.json({ error: "Describe what you ate or add a photo." }, { status: 400 });
   }
@@ -56,9 +58,11 @@ export async function POST(request: Request) {
     `Today is ${date}.`,
     `Daily targets: ${target.calories} kcal, protein ${target.proteinG} g, carbs ${target.carbsG} g, fat ${target.fatG} g.`,
     `Eaten so far today (before this): ${eatenToday.calories} kcal, P ${eatenToday.proteinG} g, C ${eatenToday.carbsG} g, F ${eatenToday.fatG} g.`,
-    replaces
-      ? `Planned meal that didn't happen: ${replaces.slot}, ${describeMeal(replaces)}.`
-      : "This was extra food, not replacing a planned meal.",
+    !replaces
+      ? "This was extra food, not replacing a planned meal."
+      : kind === "tweak"
+        ? `She ate the planned ${replaces.slot}, ${describeMeal(replaces)}, with small changes. Planned ingredients: ${replaces.ingredients.map((i) => `${i.quantity} ${i.item}`).join(", ") || "not listed"}.`
+        : `Planned meal that didn't happen: ${replaces.slot}, ${describeMeal(replaces)}.`,
     "",
     "Remaining planned meals (date / index / slot / meal):",
     remaining.length
@@ -69,7 +73,7 @@ export async function POST(request: Request) {
       ? `She attached ${imageFileIds.length === 1 ? "a photo" : `${imageFileIds.length} photos`} of what she ate (above).`
       : "",
     description.trim()
-      ? `What she ate instead, in her words:\n"""${description.trim()}"""`
+      ? `${kind === "tweak" ? "What she changed" : "What she ate instead"}, in her words:\n"""${description.trim()}"""`
       : "She didn't add a description; go by the photo.",
   ].join("\n");
 

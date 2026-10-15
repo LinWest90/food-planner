@@ -1,5 +1,5 @@
 // Weekly report numbers, computed from the plan and check-ins (never by the model).
-import { EMPTY_DAY_LOG, checkInFor, dayProgress, type FoodLog } from "./checkins.ts";
+import { EMPTY_DAY_LOG, checkInFor, countsAsPlanned, dayProgress, type FoodLog } from "./checkins.ts";
 import type { CyclePhase } from "./cycle.ts";
 import { sumMeals, toIsoDate, type Totals, type WeekPlan } from "./plan.ts";
 
@@ -12,7 +12,7 @@ export interface DayReport {
   meals: number;
   answered: number;
   asPlanned: number;
-  /** "Lunch: had a burrito instead of Chicken salad", etc. */
+  /** "Lunch: Burrito instead of Chicken salad", "Lunch: Chicken salad, with tweaks (no dressing)", etc. */
   changes: string[];
 }
 
@@ -38,7 +38,8 @@ export function weekStats(plan: WeekPlan, log: FoodLog, weekStart: string, targe
     const changes: string[] = [];
     day.meals.forEach((meal, i) => {
       const c = checkInFor(dayLog, i, meal);
-      if (c?.status === "as-planned") asPlanned++;
+      if (countsAsPlanned(c)) asPlanned++;
+      if (c?.status === "tweaked") changes.push(`${capitalize(meal.slot)}: ${meal.name}, with tweaks (${c.note})`);
       if (c?.status === "changed") changes.push(`${capitalize(meal.slot)}: ${c.ate.name} instead of ${meal.name}`);
     });
     for (const extra of dayLog.extras) changes.push(`Extra: ${extra.name}`);
@@ -78,7 +79,7 @@ export function describeWeek(stats: WeekStats): string {
   const t = stats.target;
   const lines = [
     `Week starting ${stats.weekStart}. Daily target: ${t.calories} kcal, protein ${t.proteinG} g, carbs ${t.carbsG} g, fat ${t.fatG} g.`,
-    `Check-ins: ${stats.mealsAnswered} of ${stats.mealsPlanned} planned meals answered; ${stats.mealsAsPlanned} eaten as planned. ${stats.daysFullyLogged} of ${stats.days.length} days fully logged.`,
+    `Check-ins: ${stats.mealsAnswered} of ${stats.mealsPlanned} planned meals answered; ${stats.mealsAsPlanned} eaten as planned (including planned meals eaten with small tweaks). ${stats.daysFullyLogged} of ${stats.days.length} days fully logged.`,
     stats.avgCalories === null
       ? "No fully logged days, so no reliable daily averages."
       : `Average on fully logged days: ${stats.avgCalories} kcal and ${stats.avgProteinG} g protein.`,

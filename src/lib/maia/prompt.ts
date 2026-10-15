@@ -11,6 +11,7 @@ How a planning conversation goes:
 - Start by proposing a plan direction in a few lines, or ask one short question if something important is missing (for example, on which day one cycle phase gives way to the next, foods she dislikes, or how many snacks she wants). Don't interrogate; sensible defaults are fine.
 - Suggest foods that suit the phases she selected and say briefly why. Be honest about the evidence: research on eating for cycle phases is limited and mostly about general needs, not precise effects. Good reasons are things like iron- and vitamin C-rich foods around menstruation to help replace iron, extra fiber and protein for steady energy, or a slightly larger snack in the luteal phase if her appetite is higher. Don't claim foods balance hormones or cure symptoms. If she prefers something else, go with her choice without pushback.
 - She keeps a list of favorite meals (in the planning context). Build the week around them where they fit: she likes them, so use several each week unless she asks for something new, and mix in a few fresh ideas. Keep a favorite's name so she recognizes it, and scale its portions (with recalculated macros) to hit her targets.
+- You can manage her favorites: when she asks to save a meal as a favorite, change one (portions, ingredients, name) or remove one, call save_favorite or remove_favorite, then tell her what you saved. Saving uses one serving with recalculated macros. Only change favorites when she asks.
 - When she's happy with the direction, call save_week_plan with the full week. Call it again with the whole updated week whenever she asks for changes.
 - The tool result gives each day's totals as computed by the app, compared with her targets. If a day is more than about 5% off on calories or 10 g off on protein, adjust portions and save again before replying. Then reply with a short summary: what's in the week, anything that's still off target, and what the prep list covers.
 
@@ -127,3 +128,46 @@ export function planningContext(ctx: PlanningContext): string {
     `Her favorite meals:\n${ctx.favorites ?? "none saved yet"}`,
   ].join("\n");
 }
+
+const slotProperty = { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] } as const;
+
+export const SAVE_FAVORITE_TOOL: Anthropic.Beta.BetaTool = {
+  name: "save_favorite",
+  description:
+    "Add one of her favorite meals, or update an existing favorite (matched by slot and name). Use when she asks to save a meal as a favorite or to change a saved one. One serving, with its ingredients and calories and macros for that serving.",
+  eager_input_streaming: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      slot: slotProperty,
+      name: { type: "string", description: "The favorite's name, as she knows it." },
+      ingredients: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { item: { type: "string" }, quantity: { type: "string" } },
+          required: ["item", "quantity"],
+        },
+      },
+      calories: { type: "number" },
+      proteinG: { type: "number" },
+      carbsG: { type: "number" },
+      fatG: { type: "number" },
+      replaces: {
+        type: "string",
+        description: "Only when renaming: the current name of the favorite being updated.",
+      },
+    },
+    required: ["slot", "name", "ingredients", "calories", "proteinG", "carbsG", "fatG"],
+  },
+};
+
+export const REMOVE_FAVORITE_TOOL: Anthropic.Beta.BetaTool = {
+  name: "remove_favorite",
+  description: "Remove one of her saved favorites, when she asks.",
+  input_schema: {
+    type: "object",
+    properties: { slot: slotProperty, name: { type: "string" } },
+    required: ["slot", "name"],
+  },
+};

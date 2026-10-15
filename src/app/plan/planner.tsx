@@ -170,6 +170,10 @@ export default function Planner() {
             setStreamingText(text);
           } else if (event.type === "plan") {
             plan = event.plan;
+          } else if (event.type === "favorites") {
+            fetchFavorites()
+              .then(setFavorites)
+              .catch(() => {});
           } else if (event.type === "error") {
             throw new Error(event.message);
           } else if (event.type === "done") {
