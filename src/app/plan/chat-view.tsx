@@ -1,7 +1,7 @@
 "use client";
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AutoGrowTextarea from "@/components/auto-grow-textarea";
 import { AddPhotoButton, PhotoPreviews, usePhotos } from "@/components/photo-picker";
 import RichText from "@/components/rich-text";
@@ -63,10 +63,33 @@ export default function ChatView({
   // Show the sent message right away, until it lands in history.
   const shown = busy && pending ? [...bubbles, pending] : bubbles;
 
+  // Keep the newest message in view: jump to it when the chat opens, and
+  // follow along as messages arrive unless she has scrolled up to read.
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const following = useRef(true);
+  const nearBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+  const scrollToLatest = (behavior: ScrollBehavior = "auto") =>
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+
+  useEffect(() => {
+    scrollToLatest();
+    const onScroll = () => {
+      following.current = nearBottom();
+      setAwayFromBottom(!following.current);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (following.current) scrollToLatest();
+  }, [shown.length, streamingText, error]);
+
   async function submit(text: string) {
     const message = text.trim();
     if ((!message && photos.photos.length === 0) || busy) return;
     const sending = photos.take();
+    following.current = true;
     setPending({ role: "user", text: message, previews: sending.map((p) => p.previewUrl) });
     setDraft("");
     const ok = await onSend(message, sending.map((p) => p.blob));
@@ -107,12 +130,21 @@ export default function ChatView({
       </div>
 
       <form
-        className="sticky bottom-0 mt-4 space-y-2 bg-background py-2"
+        className="sticky bottom-0 z-10 mt-4 space-y-2 bg-background py-2"
         onSubmit={(e) => {
           e.preventDefault();
           submit(draft);
         }}
       >
+        {awayFromBottom && (
+          <button
+            type="button"
+            onClick={() => scrollToLatest("smooth")}
+            className="absolute -top-11 left-1/2 -translate-x-1/2 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium shadow-md"
+          >
+            ↓ Latest
+          </button>
+        )}
         <PhotoPreviews photos={photos.photos} onRemove={photos.remove} />
         {photos.error && <p className="text-xs text-warn">⚠️ {photos.error}</p>}
         <div className="flex items-end gap-2">

@@ -32,6 +32,12 @@ function addDays(isoDate: string, days: number): string {
   return toIsoDate(new Date(y, m - 1, d + days));
 }
 
+const WEEK = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+const formatWeek = (isoDate: string) => {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return WEEK.format(new Date(y, m - 1, d));
+};
+
 const chip = (active: boolean) =>
   `rounded-full border px-3 py-1.5 text-sm ${
     active ? "border-accent bg-accent text-on-accent" : "border-line bg-surface"
@@ -45,6 +51,8 @@ export default function Planner() {
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  // null = automatic: open for a new plan, folded once the chat has started.
+  const [settingsOpen, setSettingsOpen] = useState<boolean | null>(null);
   // Saves only follow the user's own changes, one at a time, in order.
   const dirty = useRef(false);
   const saves = useRef(Promise.resolve());
@@ -220,16 +228,54 @@ export default function Planner() {
     }
   };
 
+  const phaseSummary = session.phases.length ? session.phases.map((p) => PHASE_LABELS[p]).join(" → ") : "No phases set";
+  const showSettings = settingsOpen ?? session.history.length === 0;
+
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold">Plan the week</h1>
-        <Link href="/" className="text-sm underline">
-          Home
-        </Link>
+      {/* Title and tabs stay pinned while the chat or plan scrolls. */}
+      <div className="sticky top-0 z-20 -mx-4 bg-background px-4 pb-3 pt-2">
+        <div className="flex items-baseline justify-between">
+          <h1 className="text-2xl font-semibold">Plan the week</h1>
+          <Link href="/" className="text-sm underline">
+            Home
+          </Link>
+        </div>
+        <nav className="mt-3 grid grid-cols-4 gap-1 rounded-full bg-accent-soft p-1 text-sm">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => {
+                setTab(t);
+                if (t !== "Chat") window.scrollTo({ top: 0 });
+              }}
+              className={`rounded-full py-1.5 ${tab === t ? "bg-surface font-medium shadow-sm" : ""}`}
+            >
+              {t}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      <section className="mt-4 space-y-4 rounded-xl border border-line bg-surface p-3">
+      {tab === "Chat" && (
+        <section className="mt-2 rounded-xl border border-line bg-surface p-3 text-sm">
+          <button
+            type="button"
+            aria-expanded={showSettings}
+            onClick={() => setSettingsOpen(!showSettings)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+          >
+            <span>
+              <span className="font-medium">Week of {session.weekStart ? formatWeek(session.weekStart) : "…"}</span>
+              <span className="block text-xs text-muted">
+                {phaseSummary} · {session.mode === "prep" ? "Meal prep" : "Cook each meal"}
+              </span>
+            </span>
+            <span className="shrink-0 text-xs text-muted">{showSettings ? "Hide ▲" : "Edit ▼"}</span>
+          </button>
+          {showSettings && (
+            <div className="mt-3 space-y-4 border-t border-line pt-3">
         <label className="flex items-center justify-between text-sm font-medium">
           Week starting
           <input
@@ -284,20 +330,15 @@ export default function Planner() {
             ))}
           </div>
         </div>
-      </section>
-
-      <nav className="mt-4 grid grid-cols-4 gap-1 rounded-full bg-accent-soft p-1 text-sm">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`rounded-full py-1.5 ${tab === t ? "bg-surface font-medium shadow-sm" : ""}`}
-          >
-            {t}
-          </button>
-        ))}
-      </nav>
+              {session.history.length > 0 && (
+                <button type="button" onClick={startOver} disabled={busy} className="text-xs text-muted underline">
+                  Start a new plan
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {error && tab !== "Chat" && <p className="mt-3 rounded-lg bg-accent-soft p-3 text-sm text-warn">⚠️ {error}</p>}
       <div className="mt-4 flex flex-1 flex-col">
@@ -321,11 +362,6 @@ export default function Planner() {
         )}
       </div>
 
-      {session.history.length > 0 && (
-        <button type="button" onClick={startOver} disabled={busy} className="mt-6 self-start text-xs text-muted underline">
-          Start a new plan
-        </button>
-      )}
     </div>
   );
 }
