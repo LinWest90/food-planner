@@ -97,10 +97,17 @@ export async function POST(request: Request) {
 
       try {
         for (let step = 0; step < MAX_STEPS; step++) {
+          const fallback = fallbackParams();
           const response = client.beta.messages.stream({
             model: MAIA_MODEL,
             max_tokens: 64000,
-            ...fallbackParams(),
+            ...fallback,
+            // Maia's thinking from earlier turns is tied to the exact system
+            // prompt and tools it was written under. When the app updates
+            // Maia's instructions mid-week, set those blocks aside instead of
+            // rejecting the conversation (she still sees the whole chat).
+            betas: [...fallback.betas, "thinking-binding-controls-2026-08-01"],
+            thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } },
             output_config: { effort: "medium" },
             cache_control: { type: "ephemeral" },
             system: MAIA_SYSTEM_PROMPT,
@@ -112,6 +119,8 @@ export async function POST(request: Request) {
           let final: Anthropic.Beta.BetaMessage;
           try {
             final = await response.finalMessage();
+            const dropped = (final.input_transformations ?? []).length;
+            if (dropped) console.info(`Maia: set aside ${dropped} outdated thinking block(s)`, final.input_transformations);
           } catch (err) {
             if (err instanceof Anthropic.APIError) throw err;
             // Tool input that isn't parseable JSON; ask again.

@@ -180,6 +180,13 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
   Check-ins (`src/app/api/checkin/route.ts`) use structured output: Maia
   returns what you ate plus changes to meals, and the app only accepts
   changes to meals that haven't happened yet.
+- **Updating Maia's instructions**: Claude's thinking blocks are tied to
+  the exact system prompt, tools and earlier messages they were written
+  under, so the planning route sends
+  `thinking.block_binding.prefix_mismatch_behavior: "drop_block"` (beta
+  `thinking-binding-controls-2026-08-01`). After a prompt change, ongoing
+  chats keep working: the API sets aside outdated thinking and Maia
+  continues from the visible conversation. The stored chat is never edited.
 - **Refusal fallback**: requests opt in to Anthropic's server-side
   fallback (`fallbacks: "default"`), so if a safety check declines a
   request, the API retries it on another model instead of failing.
