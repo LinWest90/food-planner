@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { CYCLE_PHASES } from "@/lib/cycle";
-import { fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
+import { describeMaiaError, fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
 import {
   MAIA_SYSTEM_PROMPT,
   SAVE_WEEK_PLAN_TOOL,
@@ -164,14 +164,7 @@ export async function POST(request: Request) {
         }
         send({ type: "error", message: "Maia took too many steps. Please try again." });
       } catch (err) {
-        console.error("Maia request failed", err);
-        const message =
-          err instanceof Anthropic.AuthenticationError
-            ? "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY."
-            : err instanceof Anthropic.RateLimitError
-              ? "Maia is busy (rate limited). Wait a minute and try again."
-              : "Something went wrong talking to Maia. Please try again.";
-        send({ type: "error", message });
+        send({ type: "error", message: describeMaiaError(err, "Maia planning request") });
       } finally {
         controller.close();
       }

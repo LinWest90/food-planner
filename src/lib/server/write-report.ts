@@ -6,7 +6,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FoodLog } from "../checkins";
 import { calculateGoals, DEFAULT_GOAL_INPUT } from "../goals";
-import { fallbackParams, MAIA_MODEL } from "../maia/client";
+import { describeMaiaError, fallbackParams, MAIA_MODEL } from "../maia/client";
 import { REPORT_SYSTEM_PROMPT, ReportNarrativeSchema } from "../maia/report-prompt";
 import { WeekPlanSchema } from "../plan";
 import { describeWeek, planSpan, weekStats } from "../report";
@@ -61,15 +61,7 @@ export async function writeReport(db: SupabaseClient, userId: string, weekStart:
     narrative = response.parsed_output;
   } catch (err) {
     if (err instanceof ReportError) throw err;
-    console.error("Report request failed", err);
-    throw new ReportError(
-      err instanceof Anthropic.AuthenticationError
-        ? "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY."
-        : err instanceof Anthropic.RateLimitError
-          ? "Maia is busy (rate limited). Wait a minute and try again."
-          : "Something went wrong talking to Maia. Please try again.",
-      502,
-    );
+    throw new ReportError(describeMaiaError(err, "Report request"), 502);
   }
 
   const saved = await db

@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { CHECKIN_SYSTEM_PROMPT, CheckInResponseSchema } from "@/lib/maia/checkin-prompt";
-import { fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
+import { describeMaiaError, fallbackParams, MAIA_MODEL, MISSING_KEY_ERROR } from "@/lib/maia/client";
 import { requireUser } from "@/lib/server-auth";
 import { MealSchema, type Meal } from "@/lib/plan";
 
@@ -122,13 +122,6 @@ export async function POST(request: Request) {
     };
     return Response.json(result);
   } catch (err) {
-    console.error("Check-in request failed", err);
-    const message =
-      err instanceof Anthropic.AuthenticationError
-        ? "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY."
-        : err instanceof Anthropic.RateLimitError
-          ? "Maia is busy (rate limited). Wait a minute and try again."
-          : "Something went wrong talking to Maia. Please try again.";
-    return Response.json({ error: message }, { status: 502 });
+    return Response.json({ error: describeMaiaError(err, "Check-in request") }, { status: 502 });
   }
 }

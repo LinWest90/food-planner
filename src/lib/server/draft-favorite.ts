@@ -2,7 +2,7 @@
 // imported recipe) with ingredients and macros, for the user to review.
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { fallbackParams, MAIA_MODEL } from "../maia/client";
+import { describeMaiaError, fallbackParams, MAIA_MODEL } from "../maia/client";
 import { FAVORITE_SYSTEM_PROMPT, FavoriteDraftSchema } from "../maia/favorite-prompt";
 import { MealSchema, type Meal } from "../plan";
 
@@ -39,14 +39,7 @@ export async function draftFavorite(
     out = response.parsed_output;
   } catch (err) {
     if (err instanceof DraftError) throw err;
-    console.error("Favorite draft failed", err);
-    throw new DraftError(
-      err instanceof Anthropic.AuthenticationError
-        ? "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY."
-        : err instanceof Anthropic.RateLimitError
-          ? "Maia is busy (rate limited). Wait a minute and try again."
-          : "Something went wrong talking to Maia. Please try again.",
-    );
+    throw new DraftError(describeMaiaError(err, "Favorite draft"));
   }
 
   const clamp = (n: number) => Math.max(0, Math.round(n));
