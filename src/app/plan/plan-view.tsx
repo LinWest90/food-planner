@@ -1,4 +1,5 @@
 import { PHASE_LABELS } from "@/lib/cycle";
+import { EMPTY_DAY_LOG, checkInFor, dayProgress, type CheckIn, type FoodLog } from "@/lib/checkins";
 import { findFavorite, type Favorite } from "@/lib/favorites";
 import { sumMeals, type Meal, type Totals, type WeekPlan } from "@/lib/plan";
 
@@ -30,6 +31,7 @@ export default function PlanView({
   onToggle,
   favorites,
   onToggleFavorite,
+  log = {},
 }: {
   plan: WeekPlan | null;
   target: Totals;
@@ -37,6 +39,7 @@ export default function PlanView({
   onToggle: (list: "prepTasks" | "shoppingList", index: number) => void;
   favorites: Favorite[];
   onToggleFavorite: (meal: Meal) => void;
+  log?: FoodLog;
 }) {
   if (!plan) {
     return <p className="text-sm text-muted">No plan yet. Chat with Maia to make one.</p>;
@@ -143,6 +146,8 @@ export default function PlanView({
       </p>
       {plan.days.map((day) => {
         const totals = sumMeals(day.meals);
+        const dayLog = log[day.date] ?? EMPTY_DAY_LOG;
+        const progress = dayProgress(day, dayLog);
         return (
           <section key={day.date} className="rounded-xl border border-line bg-surface p-3">
             <div className="flex items-baseline justify-between">
@@ -163,6 +168,14 @@ export default function PlanView({
                 F <Diff value={totals.fatG} target={target.fatG} unit=" g" />
               </span>
             </p>
+            {(progress.answered > 0 || dayLog.extras.length > 0) && (
+              <p className="mt-1 text-xs text-muted tabular-nums">
+                Checked in: {Math.round(progress.eaten.calories)} kcal eaten
+                {progress.answered < day.meals.length
+                  ? ` · ${Math.round(progress.projected.calories)} kcal if the rest goes to plan`
+                  : ""}
+              </p>
+            )}
             <ul className="mt-3 space-y-3">
               {day.meals.map((meal, i) => (
                 <li key={i} className="text-sm">
@@ -181,13 +194,35 @@ export default function PlanView({
                     </p>
                   )}
                   {meal.why && <p className="mt-0.5 text-xs italic text-muted">{meal.why}</p>}
+                  <CheckInNote checkIn={checkInFor(dayLog, i, meal)} />
                 </li>
               ))}
             </ul>
+            {dayLog.extras.length > 0 && (
+              <p className="mt-3 text-xs">
+                <span className="text-muted">Also logged: </span>
+                {dayLog.extras.map((x) => `${x.name} (${Math.round(x.calories)} kcal)`).join(", ")}
+              </p>
+            )}
           </section>
         );
       })}
     </div>
+  );
+}
+
+function CheckInNote({ checkIn }: { checkIn: CheckIn | undefined }) {
+  if (!checkIn) return null;
+  const macros = (t: { calories: number; proteinG: number }) =>
+    `${Math.round(t.calories)} kcal · P ${Math.round(t.proteinG)}`;
+  return (
+    <p className="mt-1 rounded-md bg-accent-soft px-2 py-1 text-xs">
+      {checkIn.status === "as-planned"
+        ? "✅ Eaten as planned"
+        : checkIn.status === "tweaked"
+          ? `✨ Eaten with tweaks: ${checkIn.note} (${macros(checkIn.ate)})`
+          : `❌ Ate instead: ${checkIn.ate.name} (${macros(checkIn.ate)})`}
+    </p>
   );
 }
 

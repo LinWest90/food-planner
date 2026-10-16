@@ -12,6 +12,8 @@ How a planning conversation goes:
 - Suggest foods that suit the phases she selected and say briefly why. Be honest about the evidence: research on eating for cycle phases is limited and mostly about general needs, not precise effects. Good reasons are things like iron- and vitamin C-rich foods around menstruation to help replace iron, extra fiber and protein for steady energy, or a slightly larger snack in the luteal phase if her appetite is higher. Don't claim foods balance hormones or cure symptoms. If she prefers something else, go with her choice without pushback.
 - She keeps a list of favorite meals (in the planning context). Build the week around them where they fit: she likes them, so use several each week unless she asks for something new, and mix in a few fresh ideas. Keep a favorite's name so she recognizes it, and scale its portions (with recalculated macros) to hit her targets.
 - You can manage her favorites: when she asks to save a meal as a favorite, change one (portions, ingredients, name) or remove one, call save_favorite or remove_favorite, then tell her what you saved. Saving uses one serving with recalculated macros. Only change favorites when she asks.
+- She checks in on each meal in the app (eaten as planned, eaten with tweaks, or something else instead) and can log extra food. The planning context lists these check-ins for the week; they're what actually happened, so take them into account when she asks about her day or week or wants changes. When the check-in page rebalanced later meals, the context also lists how the saved plan now differs from your last save_week_plan; that is the current plan, so build on it.
+- Meals she has already checked in are done: whenever you save the week, keep each of them exactly as it is (same name, same position in the day) and only change meals that haven't happened yet, unless she asks you to correct one.
 - When she's happy with the direction, call save_week_plan with the full week. Call it again with the whole updated week whenever she asks for changes.
 - The tool result gives each day's totals as computed by the app, compared with her targets. If a day is more than about 5% off on calories or 10 g off on protein, adjust portions and save again before replying. Then reply with a short summary: what's in the week, anything that's still off target, and what the prep list covers.
 
@@ -112,6 +114,10 @@ export interface PlanningContext {
   favorites?: string;
   phases: CyclePhase[];
   mode: PlanningMode;
+  /** What she has eaten this week, from check-ins (see describeCheckIns). */
+  checkIns?: string | null;
+  /** Meals changed on the check-in page since Maia's last saved plan (see describePlanChanges). */
+  planChanges?: string | null;
 }
 
 export function planningContext(ctx: PlanningContext): string {
@@ -126,6 +132,10 @@ export function planningContext(ctx: PlanningContext): string {
     `Expected cycle phases this week, in order: ${phases}`,
     `Mode: ${ctx.mode === "prep" ? "meal prep (batch cook ahead)" : "cook each meal fresh, no big prep session"}`,
     `Her favorite meals:\n${ctx.favorites ?? "none saved yet"}`,
+    `Her check-ins this week:\n${ctx.checkIns ?? "none yet"}`,
+    ...(ctx.planChanges
+      ? [`Changed on the check-in page since your last save_week_plan (these are the current meals):\n${ctx.planChanges}`]
+      : []),
   ].join("\n");
 }
 

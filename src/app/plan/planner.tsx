@@ -6,7 +6,9 @@ import type { MaiaEvent } from "@/app/api/maia/route";
 import { CYCLE_PHASES, PHASE_LABELS, type CyclePhase } from "@/lib/cycle";
 import { calculateGoals, type GoalResult } from "@/lib/goals";
 import { nextMonday, toIsoDate, toggleDone, type Meal, type WeekPlan } from "@/lib/plan";
+import type { FoodLog } from "@/lib/checkins";
 import {
+  fetchDayLogs,
   fetchGoalInput,
   fetchWeek,
   fetchWeekContaining,
@@ -51,6 +53,8 @@ export default function Planner() {
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  // Check-ins for the plan's days, shown on the Plan tab.
+  const [log, setLog] = useState<FoodLog>({});
   // null = automatic: open for a new plan, folded once the chat has started.
   const [settingsOpen, setSettingsOpen] = useState<boolean | null>(null);
   // Saves only follow the user's own changes, one at a time, in order.
@@ -86,6 +90,40 @@ export default function Planner() {
       saveWeek(snapshot).catch((err: Error) => setError(err.message)),
     );
   }, [session]);
+
+  const planDates = session.plan?.days.map((d) => d.date).sort() ?? [];
+  const firstDate = planDates[0];
+  const lastDate = planDates[planDates.length - 1];
+  useEffect(() => {
+    if (!firstDate || !lastDate) return;
+    fetchDayLogs(firstDate, lastDate)
+      .then(setLog)
+      .catch(() => {});
+  }, [firstDate, lastDate]);
+
+  // Check-ins can change the plan from the Today page (or another device), so
+  // reload the week when the app comes back into view, after any pending
+  // saves, so an old copy here never overwrites those changes.
+  const streaming = useRef(false);
+  streaming.current = streamingText !== null;
+  const shownWeek = useRef("");
+  shownWeek.current = session.weekStart;
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || streaming.current || !shownWeek.current) return;
+      const weekStart = shownWeek.current;
+      saves.current = saves.current.then(async () => {
+        const fresh = await fetchWeek(weekStart).catch(() => null);
+        if (!fresh || streaming.current || shownWeek.current !== weekStart) return;
+        dirty.current = false;
+        setSession(fresh);
+        const dates = fresh.plan?.days.map((d) => d.date).sort() ?? [];
+        if (dates.length) await fetchDayLogs(dates[0], dates[dates.length - 1]).then(setLog, () => {});
+      });
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, []);
 
   /** Applies a user change and saves it. */
   const change = (fn: (s: PlanningSession) => PlanningSession) => {
@@ -358,6 +396,7 @@ export default function Planner() {
             onToggle={(list, i) => change((s) => (s.plan ? { ...s, plan: toggleDone(s.plan, list, i) } : s))}
             favorites={favorites}
             onToggleFavorite={toggleFavorite}
+            log={log}
           />
         )}
       </div>

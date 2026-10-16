@@ -131,6 +131,14 @@ Built with Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4.
       Nothing changes until you tap "Update my plan". You can also log
       extra food, and see the day so far and the week's projected total.
       Phone notifications remind you too (see **Meal reminders** above).
+      Check-ins also reach the planning chat: each message to Maia includes
+      the week's check-ins (from the database, read as you) and any meals
+      the check-in page changed since her last saved plan, so she builds on
+      what actually happened. If a new plan renames or moves a meal you've
+      already checked in, the tool result warns her to put it back. The
+      Plan tab shows each meal's check-in, and the planner reloads the week
+      when the app comes back into view so an old copy can't overwrite
+      check-in changes.
 - [x] **Database and sign-in** (Supabase). Email and password sign-in. Goal,
       week plans (including the Maia chat) and check-ins are stored per
       user, protected by row level security, so they sync across devices.

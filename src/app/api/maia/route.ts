@@ -16,6 +16,8 @@ import {
   saveFavorite,
 } from "@/lib/server/favorite-tools";
 import { describeFavorites, type Favorite } from "@/lib/favorites";
+import type { DayLog, FoodLog } from "@/lib/checkins";
+import { describeCheckIns, describePlanChanges, detachedCheckIns, planChanges } from "@/lib/plan-sync";
 import { bearerToken, requireUser, userClient } from "@/lib/server-auth";
 import { WeekPlanSchema, describeTotals, type WeekPlan } from "@/lib/plan";
 
@@ -47,6 +49,21 @@ const RequestSchema = z.object({
   }),
 });
 
+/** The last week plan Maia saved in this chat, if any. */
+function lastSavedPlan(history: Anthropic.Beta.BetaMessageParam[]): WeekPlan | null {
+  for (let m = history.length - 1; m >= 0; m--) {
+    const content = history[m].content;
+    if (history[m].role !== "assistant" || typeof content === "string") continue;
+    for (let b = content.length - 1; b >= 0; b--) {
+      const block = content[b];
+      if (block.type !== "tool_use" || block.name !== "save_week_plan") continue;
+      const plan = WeekPlanSchema.safeParse(block.input);
+      if (plan.success) return plan.data;
+    }
+  }
+  return null;
+}
+
 /** Events streamed to the browser, one JSON object per line. */
 export type MaiaEvent =
   | { type: "text"; text: string }
@@ -74,11 +91,24 @@ export async function POST(request: Request) {
   const { history, message, context, imageFileIds } = parsed.data;
   // Her saved favorites, read as her (row level security applies).
   const db = userClient(bearerToken(request)!);
-  const favorites = await db
-    .from("favorites")
-    .select("id, slot, meal")
-    .order("created_at")
-    .returns<Favorite[]>();
+  const [favorites, week] = await Promise.all([
+    db.from("favorites").select("id, slot, meal").order("created_at").returns<Favorite[]>(),
+    db.from("week_plans").select("plan").eq("week_start", context.weekStart).maybeSingle<{ plan: WeekPlan | null }>(),
+  ]);
+  // The plan as saved now, which check-ins may have changed since Maia's last save.
+  let savedPlan = week.data?.plan ? WeekPlanSchema.safeParse(week.data.plan).data ?? null : null;
+  let log: FoodLog = {};
+  if (savedPlan?.days.length) {
+    const dates = savedPlan.days.map((d) => d.date).sort();
+    const logs = await db
+      .from("day_logs")
+      .select("date, check_ins, extras")
+      .gte("date", dates[0])
+      .lte("date", dates[dates.length - 1])
+      .returns<{ date: string; check_ins: DayLog["checkIns"]; extras: DayLog["extras"] }[]>();
+    log = Object.fromEntries((logs.data ?? []).map((r) => [r.date, { checkIns: r.check_ins, extras: r.extras }]));
+  }
+  const lastMaiaPlan = lastSavedPlan(history);
   if (!message.trim() && imageFileIds.length === 0) {
     return Response.json({ error: "Write a message or add a photo." }, { status: 400 });
   }
@@ -97,7 +127,12 @@ export async function POST(request: Request) {
           content: [
             {
               type: "text",
-              text: planningContext({ ...context, favorites: describeFavorites(favorites.data ?? []) }),
+              text: planningContext({
+                ...context,
+                favorites: describeFavorites(favorites.data ?? []),
+                checkIns: savedPlan && describeCheckIns(savedPlan, log),
+                planChanges: savedPlan && lastMaiaPlan && describePlanChanges(planChanges(lastMaiaPlan, savedPlan)),
+              }),
             },
             ...imageFileIds.map(
               (file_id): Anthropic.Beta.BetaImageBlockParam => ({ type: "image", source: { type: "file", file_id } }),
@@ -120,10 +155,19 @@ export async function POST(request: Request) {
           const plan = WeekPlanSchema.safeParse(tool.input);
           if (!plan.success) return toolError(tool, JSON.stringify({ INVALID_INPUT: z.prettifyError(plan.error) }));
           send({ type: "plan", plan: plan.data });
+          const detached = savedPlan ? detachedCheckIns(savedPlan, plan.data, log) : [];
+          savedPlan = plan.data;
           return {
             type: "tool_result",
             tool_use_id: tool.id,
-            content: `Saved. Daily totals computed by the app (difference from target in brackets):\n${describeTotals(plan.data, context.target)}`,
+            content: [
+              `Saved. Daily totals computed by the app (difference from target in brackets):\n${describeTotals(plan.data, context.target)}`,
+              ...(detached.length
+                ? [
+                    `Warning: these meals were already checked in, but this version renamed or moved them, so their check-ins no longer match. Unless she asked for that, save again with them back as they were:\n${detached.join("\n")}`,
+                  ]
+                : []),
+            ].join("\n\n"),
           };
         }
         if (tool.name === "save_favorite" || tool.name === "remove_favorite") {
